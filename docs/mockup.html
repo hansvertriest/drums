@@ -1,0 +1,1797 @@
+<title>Dyffle Conduct</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: task sidebar | post rail + composer | artifact viewer (any HTML, or a dyffle map) | diff sheet. Tokens are the dyffle viewer's own. */
+:root{
+  --bg:#E8ECF0; --surface:#F8FAFB; --surface-2:#EEF2F5; --ink:#18202B; --muted:#535D6B; --line:#CBD3DC; --edge:#748397; --stroke:#7A889B;
+  --accent:#3B4FD8; --accent-soft:#E2E6FB; --on-accent:#FFFFFF;
+  --add:#157548; --add-bg:#DCF2E5; --del:#B03731; --del-bg:#F8E0DD; --mod:#905807; --mod-bg:#F5E9D2;
+  --kw:#7A3BB8; --str:#1C7267; --dec:#A8530F; --com:#5C6671;
+  --pr:#79438F; --pr-bg:#EFE3F4; --shadow:rgba(15,20,30,.14);
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11151B; --surface:#192029; --surface-2:#202833; --ink:#E3E8EE; --muted:#95A0AE; --line:#2D3744; --edge:#657488; --stroke:#5E738E;
+  --accent:#93A1FF; --accent-soft:#252C4F; --on-accent:#11151B;
+  --add:#4FC48C; --add-bg:#16301F; --del:#F08A80; --del-bg:#3A1E1C; --mod:#E2AA4C; --mod-bg:#372A13;
+  --kw:#C79BFF; --str:#6DD3C2; --dec:#F0A963; --com:#8B94A0; --pr:#C69BE0; --pr-bg:#33243D; --shadow:rgba(0,0,0,.45); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151B; --surface:#192029; --surface-2:#202833; --ink:#E3E8EE; --muted:#95A0AE; --line:#2D3744; --edge:#657488; --stroke:#5E738E;
+  --accent:#93A1FF; --accent-soft:#252C4F; --on-accent:#11151B;
+  --add:#4FC48C; --add-bg:#16301F; --del:#F08A80; --del-bg:#3A1E1C; --mod:#E2AA4C; --mod-bg:#372A13;
+  --kw:#C79BFF; --str:#6DD3C2; --dec:#F0A963; --com:#8B94A0; --pr:#C69BE0; --pr-bg:#33243D; --shadow:rgba(0,0,0,.45); color-scheme:dark}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans)}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code{font-family:var(--mono);font-size:.9em}
+.app{height:100%;display:flex;padding-left:60px;position:relative}
+
+/* Sidebar: a 60px strip of task icons that unfolds over the page on hover */
+.side{position:absolute;z-index:30;inset:60px auto 0 0;width:60px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;transition:width .18s ease,box-shadow .18s ease}
+@media (min-width:901px){.side:hover,.side:has(:focus-visible){width:300px;box-shadow:8px 0 32px var(--shadow)}}
+@media (prefers-reduced-motion: reduce){.side{transition:none}}
+.brand{display:flex;align-items:center;gap:12px;height:57px;padding:0 12px;flex:none;white-space:nowrap;border-bottom:1px solid var(--line)}
+.mark{flex:none;width:36px;height:36px;border-radius:10px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font:600 16px var(--mono)}
+.brand b{font-weight:600;font-size:15px}
+.brand small{color:var(--muted);font-size:12.5px;margin-left:6px}
+.wslist{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px;display:flex;flex-direction:column;gap:4px;scrollbar-width:none}
+.wsi{display:flex;align-items:flex-start;gap:12px;width:280px;flex:none;padding:6px 4px;border:0;border-radius:10px;background:none;text-align:left}
+.wsi:hover{background:var(--surface-2)}
+.wsi.on{background:var(--accent-soft)}
+.ico{position:relative;flex:none;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;font:600 11.5px var(--mono);color:var(--muted)}
+.wsi.on .ico{border-color:var(--accent);color:var(--accent)}
+.ico i{position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--surface);background:var(--line)}
+.ico i.st-running{background:var(--accent);animation:pulse 1.2s ease-in-out infinite}
+.ico i.st-input{background:var(--mod)} .ico i.st-review{background:var(--add)} .ico i.st-pr{background:var(--pr)}
+.ico b{position:absolute;right:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.wtx{min-width:0;flex:1;display:grid;gap:3px;padding:6px 6px 6px 0}
+.wst{font-weight:500;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wsm{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);white-space:nowrap}
+.wsm .m{font-family:var(--mono)}
+.wsr{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.ttag{font:500 10.5px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.newbtn{display:flex;align-items:center;gap:12px;width:280px;flex:none;margin:0 10px 12px;padding:4px;border:0;border-radius:10px;background:none;text-align:left;font-weight:500;white-space:nowrap}
+.newbtn span{flex:none;width:32px;height:32px;border-radius:9px;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-size:18px}
+.newbtn:hover{background:var(--surface-2)}
+.rtag{font:11.5px var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px;background:var(--surface)}
+
+.pill{display:inline-flex;align-items:center;gap:6px;font:500 12.5px var(--sans);white-space:nowrap;color:var(--muted)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.st-running i{background:var(--accent);animation:pulse 1.2s ease-in-out infinite}
+.st-input{color:var(--mod)} .st-input i{background:var(--mod)}
+.st-review i{background:var(--add)}
+.st-pr i{background:var(--pr)}
+.cnt{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--mod);color:var(--surface);font:600 11px var(--sans);display:inline-flex;align-items:center;justify-content:center}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion: reduce){.st-running i{animation:none}}
+.a{color:var(--add)} .d{color:var(--del)}
+
+/* Workspace */
+.ws{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.wshead{display:flex;align-items:center;gap:16px;height:60px;flex:none;margin-left:-60px;padding:0 20px 0 0;background:var(--surface);border-bottom:1px solid var(--line)}
+/* The logo sits in the header, in a 60px cell over the task strip, so the strip's edge and the header's line meet */
+.hmark{flex:none;align-self:stretch;width:60px;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--line)}
+.iconbtn.menubtn{display:none}
+.wstitle{flex:1 1 320px;min-width:0}
+.wstitle h2{margin:0;font-size:16px;font-weight:600;line-height:1.3;text-wrap:balance}
+.wstitle p{margin:2px 0 0;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsact{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 12px;border:1px solid var(--stroke);border-radius:10px;background:var(--surface);font-weight:500;font-size:13.5px}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn .n{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+.btn.primary .n{background:var(--on-accent);color:var(--accent)}
+.btn .n.z{background:var(--surface-2);color:var(--muted)}
+.prlinks{display:inline-flex;gap:6px;flex-wrap:wrap}
+.prlinks span{font:500 12.5px var(--mono);color:var(--pr);border:1px solid var(--pr);border-radius:8px;padding:4px 8px}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 8px;border:1px solid var(--stroke);border-radius:10px;background:var(--surface)}
+.iconbtn:hover{border-color:var(--muted)}
+.iconbtn:disabled{opacity:.4;cursor:default}
+.iconbtn.ghost,.btn.ghost{border-color:transparent;background:none}
+.iconbtn.ghost{color:var(--muted)}
+.iconbtn.ghost:hover,.btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
+
+.mtabs{display:none}
+.body{flex:1;min-height:0;display:grid;grid-template-columns:360px minmax(0,1fr)}
+.body.withsheet{grid-template-columns:360px minmax(0,1fr) 500px}
+.body.nochat{grid-template-columns:minmax(0,1fr)}
+.body.nochat.withsheet{grid-template-columns:minmax(0,1fr) 500px}
+.body.nochat .rail{display:none}
+
+/* Rail: the feed of posts */
+.rail{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--surface)}
+.railhd{display:flex;align-items:center;gap:2px;padding:8px 8px 6px;border-bottom:1px solid var(--line)}
+.threads{flex:1;min-width:0;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.threads::-webkit-scrollbar{display:none}
+.threads button{flex:none;position:relative;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;border-radius:8px;background:none;font-size:13px;color:var(--muted);white-space:nowrap}
+.threads button:hover{background:var(--surface-2);color:var(--ink)}
+.threads button.on{background:var(--surface-2);color:var(--ink);font-weight:500}
+.threads i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.threads i.st-running{background:var(--accent);animation:pulse 1.2s ease-in-out infinite}
+.threads i.st-input{background:var(--mod)} .threads i.st-review{background:var(--add)}
+.threads b{position:absolute;top:4px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+#addag{font-size:17px;padding:0 9px}
+#tx[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft)}
+.post .by{flex:1;font:600 11px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.post>h3{margin:2px 0 0;font-size:14px;font-weight:600;line-height:1.35}
+.fi.tool i{font-style:normal;color:var(--accent)}
+.toline{display:flex;align-items:center;gap:8px;margin:0 2px 8px;font-size:12.5px;color:var(--muted)}
+.toline select{height:28px;padding:0 6px;border:1px solid var(--stroke);border-radius:8px;background:var(--bg);font-size:13px}
+.working em{font-style:normal;color:var(--muted)}
+/* The collapsed chat: a tab attached to the current task's icon in the strip */
+.chattab{position:absolute;z-index:25;left:76px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:46px;height:46px;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:var(--accent);color:var(--on-accent);box-shadow:0 6px 20px var(--shadow)}
+.chattab:hover{filter:brightness(1.08)}
+.chattab b{position:absolute;top:1px;right:1px;width:12px;height:12px;border-radius:50%;background:var(--mod);border:2px solid var(--bg)}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
+.switch input{appearance:none;width:30px;height:18px;border-radius:999px;background:var(--line);position:relative;margin:0;cursor:pointer;transition:background .15s;flex:none}
+.switch input::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--surface);transition:transform .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(12px)}
+.feed{flex:1;overflow:auto;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px}
+.fi{min-width:0}
+.fi.prompt,.fi.user{align-self:flex-end;max-width:92%;background:var(--accent-soft);border-radius:12px 12px 4px 12px;padding:9px 12px}
+.who{display:block;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.fi.status{font-size:12.5px;color:var(--muted);text-align:center;padding:2px 8px}
+.fi.status code{color:var(--ink)}
+.fi.tool{font:12px var(--mono);color:var(--muted);padding-left:4px;display:flex;gap:7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fi.tool b{font-weight:500;color:var(--ink)}
+.post{border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:11px 13px 12px}
+.post.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.post header{display:flex;align-items:baseline;gap:8px}
+.post header b{font:600 12.5px var(--mono);color:var(--muted)}
+.post header h3{margin:0;font-size:14px;font-weight:600;line-height:1.35;flex:1}
+.post header time{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.md{font-size:13.5px;line-height:1.55}
+.md p{margin:6px 0 0}
+.md ul{margin:6px 0 0;padding-left:18px}
+.md code{background:var(--surface-2);border-radius:4px;padding:0 3px}
+.ref{border:0;padding:0 3px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:.9em var(--mono);cursor:pointer}
+.ref:hover{text-decoration:underline}
+.chg{margin-top:10px;width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:7px 10px;border:1px solid var(--stroke);border-radius:9px;background:var(--surface);font-size:12.5px;text-align:left}
+.chg:hover{border-color:var(--accent)}
+.chg .k{font:500 11px var(--sans);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.chg .m{font-family:var(--mono)}
+.chg .go{margin-left:auto;font-weight:500;color:var(--accent)}
+.post.sel .chg{border-color:var(--accent);background:var(--accent-soft)}
+.postfoot{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:12px;color:var(--muted)}
+.review{align-self:flex-end;max-width:92%;border:1px solid var(--line);background:var(--accent-soft);border-radius:12px 12px 4px 12px;padding:9px 12px}
+.review ul{margin:6px 0 0;padding-left:16px;font-size:13px}
+.review li code{font-size:11.5px;color:var(--muted)}
+.composer{border-top:1px solid var(--line);padding:10px 12px 12px;background:var(--surface)}
+.working{display:flex;align-items:center;gap:8px;margin:0 2px 8px;font:12px var(--mono);color:var(--accent);min-width:0}
+.working span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.working button{font:500 12px var(--sans);border:1px solid var(--stroke);background:var(--surface);border-radius:7px;height:24px;padding:0 8px;color:var(--ink)}
+.cbox{display:flex;gap:8px;align-items:flex-end;border:1px solid var(--stroke);border-radius:12px;background:var(--bg);padding:6px 6px 6px 12px}
+.cbox:focus-within{border-color:var(--accent)}
+.cbox textarea{flex:1;border:0;background:none;resize:none;outline:none;min-height:40px;max-height:160px;padding:4px 0;line-height:1.45}
+.cbox .btn{height:32px}
+
+/* Stage: the artifact viewer */
+.stage{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0}
+.shelf{display:flex;gap:4px;padding:8px 16px 0;overflow-x:auto;border-bottom:1px solid var(--line);background:var(--surface);scrollbar-width:none}
+.shelf::-webkit-scrollbar{display:none}
+.shelf button{flex:none;display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;background:none;font-size:13px;color:var(--muted);margin-bottom:-1px}
+.shelf button.on{background:var(--bg);border-color:var(--line);color:var(--ink);font-weight:500}
+.shelf .k{font:500 10.5px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.shelf .v{font:11.5px var(--mono);color:var(--muted)}
+.stagebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 16px}
+.picker{display:flex;align-items:center;gap:4px;min-width:0}
+.picker select{height:34px;max-width:320px;min-width:0;padding:0 8px;border:1px solid var(--stroke);border-radius:10px;background:var(--surface);font-size:13px}
+.rfilter{display:flex;gap:2px;padding:2px;border:1px solid var(--stroke);border-radius:10px;background:var(--surface)}
+.rfilter button{height:28px;padding:0 9px;border:0;border-radius:8px;background:none;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.rfilter button.on{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.rfilter small{font:11.5px var(--mono);margin-left:4px}
+.vnote{font-size:12.5px;color:var(--muted);min-width:0;flex:1 1 200px}
+.vnote b{color:var(--ink);font-weight:500}
+.livetag{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.livetag i{width:7px;height:7px;border-radius:50%;background:var(--add)}
+.livetag.on i{animation:pulse 1.2s ease-in-out infinite}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-left:auto}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.oldver{margin:0 16px 8px;padding:7px 12px;border-radius:9px;background:var(--mod-bg);color:var(--mod);font-size:12.5px;display:flex;gap:10px;align-items:center}
+.oldver button{margin-left:auto;border:0;background:none;color:inherit;font-weight:600;text-decoration:underline}
+.docwrap{flex:1;min-height:0;overflow:auto;background:var(--bg);border-top:1px solid var(--line)}
+.mapwrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+.canvas{flex:1;min-height:0;position:relative;overflow:hidden;touch-action:none;cursor:grab;background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:22px 22px}
+.canvas.panning{cursor:grabbing}
+.canvas svg{position:absolute;left:0;top:0;transform-origin:0 0;overflow:visible}
+.zoomctl{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;border:1px solid var(--stroke);border-radius:10px;background:var(--surface);box-shadow:0 4px 14px var(--shadow);overflow:hidden}
+.zoomctl button{width:38px;height:36px;border:0;background:none;font:500 16px var(--sans)}
+.zoomctl button+button{border-top:1px solid var(--line)}
+.zoomctl button:hover{background:var(--surface-2)}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:20px}
+.rfr>rect{fill:color-mix(in srgb,var(--bg) 55%,transparent);stroke:var(--stroke);stroke-width:1.2}
+.rfr .rn{font:600 15px var(--sans);fill:var(--ink)}
+.rfr .rk{font:12px var(--mono);fill:var(--muted)}
+.mod rect{fill:color-mix(in srgb,var(--surface) 45%,transparent);stroke:var(--line);stroke-dasharray:4 4}
+.mod .mn{font:600 12.5px var(--sans);fill:var(--muted)}
+.mod .mp{font:11.5px var(--mono);fill:var(--muted)}
+.node{cursor:pointer}
+.node rect.box{fill:var(--surface);stroke:var(--stroke);stroke-width:1}
+.node:hover rect.box{stroke:var(--muted)}
+.node.sel rect.box{stroke:var(--accent);stroke-width:2}
+.node.ctx rect.box{fill:var(--surface-2)}
+.node .bar{fill:var(--line)}
+.node.s-modified .bar{fill:var(--mod)}
+.node.s-added .bar{fill:var(--add)}
+.node .nm{font:600 13.5px var(--sans);fill:var(--ink)}
+.node.ctx .nm{font-weight:500}
+.node .pth{font:11.5px var(--mono);fill:var(--muted)}
+.node .meta{font:500 12px var(--mono);fill:var(--muted)}
+.node .meta .a{fill:var(--add)} .node .meta .d{fill:var(--del)}
+.node .nv path{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round}
+.node .nv circle{fill:var(--accent)}
+.node .cc{fill:var(--accent)}
+.node .cct{font:600 10.5px var(--sans);fill:var(--on-accent)}
+.node:focus{outline:none}
+.node:focus-visible rect.box{stroke:var(--accent);stroke-width:2}
+.node.fresh rect.box{animation:flash 1.4s ease-out}
+@keyframes flash{0%{stroke:var(--accent);stroke-width:4}100%{stroke-width:1}}
+@media (prefers-reduced-motion: reduce){.node.fresh rect.box{animation:none}}
+.edge{fill:none;stroke:var(--edge);stroke-width:1.3}
+.edge.hot{stroke:var(--accent);stroke-width:2}
+.arrow{fill:var(--edge)}
+
+/* Sheet: a file's diff */
+.sheet{display:flex;flex-direction:column;min-width:0;min-height:0;border-left:1px solid var(--line);background:var(--surface)}
+.shhd{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.shhd div{flex:1;min-width:0}
+.shhd h3{margin:0;font-size:15px;font-weight:600;word-break:break-all}
+.shhd code{color:var(--muted);font-size:12px;word-break:break-all}
+.shhd .rtag{margin-right:6px}
+.shbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:12.5px}
+.shbar .stl{font:500 12px var(--mono)}
+.since{color:var(--mod);font-size:12px}
+.syms{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.sym{font:12px var(--mono);border:1px solid var(--line);border-radius:6px;padding:2px 7px;background:var(--bg)}
+.sym::before{content:"";display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:6px;background:var(--line)}
+.sym.added::before{background:var(--add)} .sym.modified::before{background:var(--mod)}
+.diff{flex:1;overflow:auto;font:12.5px/1.6 var(--mono);padding-bottom:20px}
+.hh{padding:4px 16px;color:var(--muted);background:var(--surface-2);border-block:1px solid var(--line);margin-top:10px;font-size:12px}
+.hh:first-child{margin-top:0;border-top:0}
+.dl{display:grid;grid-template-columns:24px 40px 40px max-content;min-width:100%;position:relative}
+.dl .ln{color:var(--muted);text-align:right;padding-right:8px;user-select:none;font-variant-numeric:tabular-nums}
+.dl .cd{white-space:pre;padding:0 16px 0 10px}
+.dl.add{background:var(--add-bg)} .dl.add .cd::before{content:"+";position:absolute;margin-left:-9px;color:var(--add)}
+.dl.del{background:var(--del-bg)} .dl.del .cd::before{content:"−";position:absolute;margin-left:-9px;color:var(--del)}
+.addc{width:20px;height:20px;margin:0 2px;border-radius:6px;border:0;background:var(--accent);color:var(--on-accent);font:600 14px/1 var(--sans);opacity:0;align-self:center}
+.dl:hover .addc,.addc:focus-visible{opacity:1}
+.kw{color:var(--kw)} .str{color:var(--str)} .dec{color:var(--dec)} .com{color:var(--com);font-style:italic}
+.thread{font:13px/1.5 var(--sans);margin:6px 16px 8px 64px;max-width:380px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px 10px}
+.thread b{font-weight:600;font-size:12px}
+.thread p{margin:2px 0 0;white-space:pre-wrap}
+.thread .row{display:flex;align-items:center;gap:8px}
+.thread .row button{margin-left:auto;border:0;background:none;color:var(--muted);font-size:12px}
+.thread textarea{width:100%;min-height:64px;border:1px solid var(--stroke);border-radius:8px;background:var(--bg);padding:6px 8px;resize:vertical}
+.thread .acts{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}
+.thread .acts .btn{height:30px;font-size:13px}
+.ctxinfo{padding:16px;color:var(--muted);font-size:13.5px}
+.ctxinfo ul{padding-left:18px}
+
+/* Popover, modals, toast */
+.pop{position:fixed;z-index:30;width:min(440px,calc(100vw - 32px));max-height:min(72vh,600px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px var(--shadow);padding:14px 16px}
+.pop h4{margin:0 0 4px;font-size:14px}
+.pop h5{margin:12px 0 2px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.pop .hint{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+.pop textarea{width:100%;min-height:64px;border:1px solid var(--stroke);border-radius:10px;background:var(--bg);padding:8px 10px;resize:vertical}
+.rc{border-top:1px solid var(--line);padding:8px 0;font-size:13px}
+.rc .loc{display:flex;gap:8px;font:12px var(--mono);color:var(--muted)}
+.rc .loc button{margin-left:auto;border:0;background:none;color:var(--muted);font:12px var(--sans)}
+.rc pre{margin:4px 0;font:12px var(--mono);background:var(--bg);border-radius:6px;padding:3px 7px;overflow:auto}
+.rc .ans{display:flex;gap:10px;justify-content:space-between}
+.rc .ans span:first-child{color:var(--muted)}
+.rc .ans b{font-weight:500;text-align:right}
+.pop .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.scrim{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,var(--ink) 35%,transparent);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{width:min(600px,100%);max-height:calc(100% - 32px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px var(--shadow);padding:20px}
+.modal h3{margin:0;font-size:17px}
+.modal .hint{margin:4px 0 14px;font-size:13px;color:var(--muted)}
+.field{display:grid;gap:5px;margin-bottom:12px}
+.field>label,.field>legend{font-size:12.5px;font-weight:500;color:var(--muted);padding:0}
+fieldset.field{border:0;margin:0 0 12px;padding:0;min-width:0}
+.field input,.field select,.field textarea{width:100%;border:1px solid var(--stroke);border-radius:10px;background:var(--bg);padding:8px 10px}
+.field textarea{resize:vertical}
+.types{display:flex;flex-wrap:wrap;gap:6px}
+.types label{position:relative}
+.types input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.types span{display:block;padding:6px 12px;border:1px solid var(--stroke);border-radius:999px;font-size:13px;background:var(--bg)}
+.types input:checked+span{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.types input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.rpick{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.rpick+.rpick{margin-top:6px}
+.rpick label{display:flex;align-items:center;gap:10px;min-width:0}
+.rpick input[type=checkbox]{width:16px;height:16px;margin:0;accent-color:var(--accent);flex:none}
+.rpick small{color:var(--muted);font:12px var(--mono)}
+.rpick select{height:32px;padding:0 8px}
+.rpick.off select{opacity:.4}
+.prrepo{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--bg)}
+.prrepo>label{display:flex;align-items:center;gap:10px;font-weight:500;margin-bottom:8px}
+.prrepo>label small{margin-left:auto;font:12px var(--mono);color:var(--muted)}
+.prrepo input[type=checkbox]{width:16px;height:16px;margin:0;accent-color:var(--accent)}
+.prrepo textarea{width:100%;border:1px solid var(--stroke);border-radius:10px;background:var(--surface);padding:8px 10px;font:12.5px/1.5 var(--mono);min-height:170px;resize:vertical}
+.prrepo.none{color:var(--muted);font-size:13px}
+.modal .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.steps{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:var(--bg);font-size:12.5px;color:var(--muted);display:grid;gap:3px}
+.steps code{color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:50;background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:10px;font-size:13.5px;box-shadow:0 8px 24px var(--shadow);max-width:calc(100vw - 32px)}
+
+/* Phones */
+@media (max-width: 900px){
+  .app{padding-left:0}
+  .side{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);z-index:35;transform:translateX(-102%);transition:transform .2s;box-shadow:0 0 40px var(--shadow);padding-top:env(safe-area-inset-top,0px)}
+  .side.open{transform:none}
+  .iconbtn.menubtn{display:inline-flex}
+  .wshead{height:auto;min-height:56px;margin-left:0;padding:8px 16px 8px 0;flex-wrap:wrap;gap:10px}
+  .hmark{width:56px}
+  .wstitle{flex-basis:200px}
+  .mtabs{display:flex;gap:4px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .mtabs button{flex:1;height:34px;border:1px solid var(--line);border-radius:9px;background:none;font-weight:500;font-size:13px}
+  .mtabs button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .body,.body.withsheet,.body.nochat.withsheet{grid-template-columns:minmax(0,1fr)}
+  .chattab,#chatcollapse{display:none !important}
+  .body.nochat .rail{display:flex}
+  .body[data-tab="art"] .rail{display:none}
+  .body[data-tab="feed"] .stage{display:none}
+  .rail{border-right:0}
+  .sheet{position:fixed;inset:0;z-index:36;border:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .legend{display:none}
+  .rpick{grid-template-columns:1fr}
+  .addc{opacity:1}
+}
+</style>
+
+<div class="app">
+  <aside class="side" id="side">
+    <div class="wslist" id="wslist"></div>
+    <button class="newbtn" id="newws"><span aria-hidden="true">+</span>New workspace</button>
+  </aside>
+  <button class="chattab" id="chattab" hidden aria-label="Open chat" title="Open chat (\)"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5v6a1.5 1.5 0 0 1-1.5 1.5H8l-3.5 3v-3h0A1.5 1.5 0 0 1 3 10.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><b hidden></b></button>
+
+  <section class="ws">
+    <header class="wshead">
+      <span class="hmark"><span class="mark" role="img" aria-label="acme conduct">d</span></span>
+      <button class="iconbtn menubtn" id="menubtn" aria-label="Tasks"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6"/></svg></button>
+      <div class="wstitle"><h2 id="wtitle"></h2><p id="wsub"></p></div>
+      <div class="wsact" id="wsact"></div>
+    </header>
+    <div class="mtabs" id="mtabs"><button data-tab="feed">Feed</button><button data-tab="art" class="on">Artifact</button></div>
+    <div class="body" id="body" data-tab="art">
+      <div class="rail">
+        <div class="railhd"><button class="iconbtn ghost" id="chatcollapse" aria-label="Collapse chat" title="Collapse chat (\)"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 3.5 4.5 8 9 12.5M13 3.5 8.5 8 13 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="threads" id="threads" role="tablist" aria-label="Agents"></div><button class="iconbtn ghost" id="tx" aria-pressed="false" aria-label="Show steps" title="Show steps"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></div>
+        <div class="feed" id="feed"></div>
+        <div class="composer">
+          <div class="working" id="working" hidden></div>
+          <div class="toline" id="toline" hidden><label for="cto">To</label><select id="cto"></select></div>
+          <form class="cbox" id="cform">
+            <textarea id="cin" rows="2" placeholder="Tell Claude what to do next…"></textarea>
+            <button class="btn primary" type="submit">Send</button>
+          </form>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="shelf" id="shelf" role="tablist" aria-label="Artifacts"></div>
+        <div class="stagebar">
+          <div class="picker">
+            <button class="iconbtn" id="prev" aria-label="Previous version">‹</button>
+            <select id="pick" aria-label="Version"></select>
+            <button class="iconbtn" id="next" aria-label="Next version">›</button>
+          </div>
+          <div class="rfilter" id="rfilter" hidden></div>
+          <span class="livetag" id="livetag" hidden></span>
+          <span class="vnote" id="vnote"></span>
+          <label class="switch" id="hlwrap"><input type="checkbox" id="hl" checked> Changes</label>
+        </div>
+        <div class="oldver" id="oldver" hidden></div>
+        <div class="docwrap" id="docwrap"><div id="doc"></div></div>
+        <div class="mapwrap" id="mapwrap" hidden>
+          <div class="canvas" id="canvas"></div>
+          <div class="zoomctl"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" aria-label="Fit" style="font-size:12px">Fit</button></div>
+        </div>
+      </div>
+      <div class="sheet" id="sheet" hidden></div>
+    </div>
+  </section>
+</div>
+<div class="pop" id="pop" hidden></div>
+<div id="modal"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const now = () => new Date().toTimeString().slice(0,5);
+const clone = o => JSON.parse(JSON.stringify(o));
+const andList = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+
+// =====================================================================
+// Artifacts. An artifact is living HTML with versions. Its controls (any
+// input, select or textarea with a name) are the user's answers: the app
+// collects what changed and hands it to Claude, who posts the next version.
+// The KIT is the stylesheet every artifact gets; it reads the app's tokens.
+// =====================================================================
+const KIT = `
+:host{display:block;color:var(--ink);font:15px/1.6 var(--sans)}
+*{box-sizing:border-box}
+.doc{max-width:900px;margin:0 auto;padding:28px max(16px,4vw) 72px}
+.eyebrow{font:500 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0}
+h1{font-size:26px;line-height:1.2;margin:6px 0 8px;text-wrap:balance}
+.lede{font-size:16px;max-width:64ch;margin:0}
+h2{font-size:15px;margin:0 0 8px}
+section{margin-top:30px}
+.hint{color:var(--muted);font-size:13px;margin:-4px 0 10px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+thead th{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:13px;white-space:nowrap}
+td small{display:block;color:var(--muted);font-size:12.5px}
+tfoot td{font-weight:600;border-bottom:0}
+.kv th{width:42%;font-weight:500}
+.kv .to{font-family:var(--mono);font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--stroke);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg label{position:relative;display:block}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;padding:3px 10px;font-size:12.5px;border-left:1px solid var(--line)}
+.seg label:first-child span{border-left:0}
+.seg input:checked+span{background:var(--accent);color:var(--on-accent)}
+.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-2px}
+.q{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface);margin-bottom:10px}
+.q p{margin:0;font-weight:500}
+.q small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+select,textarea{font:inherit;font-size:14px;color:inherit;background:var(--bg);border:1px solid var(--stroke);border-radius:8px;padding:6px 8px}
+.q select,.notes textarea{width:100%;margin-top:8px}
+.notes textarea{min-height:76px;resize:vertical}
+select.sm{padding:3px 6px;font-size:13px}
+input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;margin:0}
+:disabled{opacity:.6;cursor:default}
+.dec{list-style:none;padding:0;margin:0;display:grid;gap:6px}
+.dec li{display:grid;gap:2px;padding:8px 12px;border-radius:10px;background:var(--add-bg)}
+.dec b{font-weight:500}
+.dec span{color:var(--add);font-weight:600}
+.call{border-radius:12px;padding:14px 16px;background:var(--accent-soft)}
+.call b{color:var(--accent)}
+.dots{font-family:var(--mono);letter-spacing:1px;color:var(--accent)}
+.dots i{font-style:normal;color:var(--line)}
+.barc{display:flex;align-items:center;gap:8px;min-width:120px}
+.bar{flex:1;height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.barc b{font:600 13px var(--mono);min-width:2.5em;text-align:right}
+.best td{font-weight:600}
+.muted{color:var(--muted)}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.chg-on .chg{background:var(--accent-soft);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)}
+.chg-on section.chg,.chg-on .q.chg,.chg-on .variant.chg{border-radius:14px;padding:12px 14px;margin-inline:-14px}
+.chg-on tr.chg{box-shadow:none}
+.screens{display:flex;flex-wrap:wrap;gap:28px;margin-top:8px}
+.variant{display:grid;gap:10px;justify-items:start;align-content:start}
+.variant>label{display:flex;gap:8px;align-items:center;font-weight:600}
+.variant>label input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.variant p{margin:0;max-width:250px;font-size:13px;color:var(--muted)}
+.phone{width:250px;border:7px solid var(--ink);border-radius:34px;background:var(--bg);overflow:hidden;box-shadow:0 10px 30px var(--shadow)}
+.scr{padding:16px 16px 18px;min-height:440px;display:flex;flex-direction:column;gap:10px;font-size:13px}
+.ph-top{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--muted)}
+.ph-h{font-size:19px;font-weight:600;line-height:1.2}
+.ph-s{color:var(--muted);margin-top:-6px}
+.tl{list-style:none;margin:4px 0 0;padding:0}
+.tl li{position:relative;padding:0 0 14px 20px;border-left:2px solid var(--line);margin-left:6px}
+.tl li::before{content:"";position:absolute;left:-7px;top:3px;width:8px;height:8px;border-radius:50%;background:var(--bg);border:2px solid var(--line)}
+.tl li.done{border-left-color:var(--add)} .tl li.done::before{background:var(--add);border-color:var(--add)}
+.tl li.now::before{background:var(--accent);border-color:var(--accent)}
+.tl li:last-child{border-left-color:transparent;padding-bottom:0}
+.tl small{display:block;color:var(--muted)}
+.map{height:150px;border-radius:14px;background:var(--surface-2);overflow:hidden}
+.map svg{display:block;width:100%;height:100%}
+.big{font-size:34px;font-weight:600;line-height:1}
+.ph-btn{margin-top:auto;border-radius:12px;background:var(--accent);color:var(--on-accent);text-align:center;padding:10px;font-weight:500}
+.ph-card{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--surface);display:grid;gap:6px}
+.sk{height:9px;border-radius:5px;background:var(--line)}
+.opts{display:grid;gap:8px}
+.opts label{display:flex;gap:8px;align-items:center}
+.spec td:first-child{font-weight:500;width:34%}
+`;
+
+// ---- Scope ----
+function scopeHtml(d, v, chg){
+  const C = id => chg.includes(id) ? ' chg' : '';
+  const ins = d.items.filter(i => i.scope === 'in'), days = ins.reduce((s, i) => s + (i.est || 0), 0);
+  return `<div class="doc">
+  <p class="eyebrow">Scope · v${v} · ${esc(d.status)}</p>
+  <h1>${esc(d.title)}</h1>
+  <p class="lede">${esc(d.goal)}</p>
+  ${d.metrics.length ? `<section class="${C('metrics')}"><h2>Success looks like</h2><div class="tw"><table class="kv"><tbody>${d.metrics.map(m => `<tr><th>${esc(m[0])}</th><td class="to">${esc(m[1])}</td><td class="to">${esc(m[2])}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
+  <section class="${C('items')}"><h2>What’s in</h2><p class="hint">Set each item to In, Later or Out. Claude re-plans in the next version.</p>
+  <div class="tw"><table><thead><tr><th>Item</th><th class="num">Estimate</th><th>Scope</th></tr></thead><tbody>
+  ${d.items.map(i => `<tr class="${C('i-' + i.id)}"><td>${esc(i.text)}${i.note ? `<small>${esc(i.note)}</small>` : ''}</td><td class="num">${i.est ? i.est + ' d' : '—'}</td>
+    <td><div class="seg" data-label="${esc(i.text)}">${['in','later','out'].map(s => `<label><input type="radio" name="scope-${i.id}" value="${s}" ${i.scope === s ? 'checked' : ''}><span>${s[0].toUpperCase() + s.slice(1)}</span></label>`).join('')}</div></td></tr>`).join('')}
+  </tbody><tfoot><tr><td>In scope</td><td class="num">${days ? days + ' d' : '—'}</td><td>${ins.length} of ${d.items.length} items</td></tr></tfoot></table></div></section>
+  ${d.questions.length ? `<section class="${C('questions')}"><h2>Open questions</h2><p class="hint">Claude can’t finish the scope without these.</p>${d.questions.map(q => `<div class="q${C('q-' + q.id)}" data-label="${esc(q.short)}"><p>${esc(q.q)}</p>${q.why ? `<small>${esc(q.why)}</small>` : ''}<select name="q-${q.id}"><option value="">Pick an answer…</option>${q.options.map(o => `<option>${esc(o)}</option>`).join('')}</select></div>`).join('')}</section>` : ''}
+  ${d.decisions.length ? `<section class="${C('decisions')}"><h2>Decisions</h2><ul class="dec">${d.decisions.map(x => `<li><b>${esc(x.q)}</b><span>${esc(x.a)}</span></li>`).join('')}</ul></section>` : ''}
+  ${d.risks.length ? `<section class="${C('risks')}"><h2>Risks</h2><ul>${d.risks.map(r => `<li>${esc(r)}</li>`).join('')}</ul></section>` : ''}
+  ${askedHtml(d, C)}
+  <section class="notes" data-label="Notes on the scope"><h2>Anything else?</h2><textarea name="notes" placeholder="Notes for Claude on this scope (optional)"></textarea></section>
+</div>`;
+}
+const SCOPE_EFFECTS = {
+  track(d, a, chg){ if (a.startsWith('Yes')) { d.items.push({id:'track', text:'Order tracking link for guests', note:'Signed link in the confirmation email, valid 30 days', est:2, scope:'in'}); chg.push('i-track'); } },
+  psp(d, a, chg){
+    const apple = d.items.find(i => i.id === 'wallets');
+    if (a.startsWith('Mollie')) { apple.note = 'Mollie supports both wallets: no new contract'; chg.push('i-wallets'); }
+    else { d.items.push({id:'psp', text:`Move wallet payments to ${a}`, note:'New contract, webhooks and refunds flow', est:5, scope:'in'}); d.risks.push(`Switching to ${a} needs a signed contract before development starts.`); chg.push('i-psp', 'risks'); }
+  },
+  b2b(d, a, chg){ const it = d.items.find(i => i.id === 'b2b'); it.scope = a.startsWith('Yes') ? 'in' : a === 'Later' ? 'later' : 'out'; it.note = ''; chg.push('i-b2b'); },
+};
+function scopeApply(d0, ans){
+  const d = clone(d0), chg = [], said = [];
+  const days = x => x.items.filter(i => i.scope === 'in').reduce((s, i) => s + (i.est || 0), 0), before = days(d0);
+  d.items.forEach(i => { const a = ans['scope-' + i.id]; if (a && a !== i.scope) { i.scope = a; chg.push('i-' + i.id); said.push(`${i.text}: ${a}`); } });
+  d.questions = d.questions.filter(q => {
+    const a = ans['q-' + q.id]; if (!a) return true;
+    d.decisions.push({q: q.short, a}); chg.push('decisions'); said.push(`${q.short}: ${a}`);
+    SCOPE_EFFECTS[q.id]?.(d, a, chg); return false;
+  });
+  if (ans.notes?.trim()) { d.asked.push(ans.notes.trim()); chg.push('asked'); said.push('your notes'); }
+  if (!d.questions.length) d.status = 'ready to build';
+  const after = days(d);
+  return {d, chg, title: `Applied ${said.length} answer${said.length === 1 ? '' : 's'}${d.questions.length ? '' : ': scope is complete'}`,
+    note: `${said.length} answers applied. In scope ${before} d → ${after} d.`,
+    msg: `Applied your answers:\n\n${said.map(s => '- ' + s).join('\n')}\n\nIn scope went from **${before} days** to **${after} days**.${d.questions.length ? ` ${d.questions.length} question${d.questions.length === 1 ? ' is' : 's are'} still open.` : ' No open questions left: hand it off to a code task when you’re happy.'}`,
+    status: d.questions.length ? 'input' : 'review'};
+}
+function askedHtml(d, C){
+  return d.asked && d.asked.length ? `<section class="${C('asked')}"><h2>Changes you asked for</h2><ul>${d.asked.map(a => `<li>${esc(a)} <span class="muted">· done</span></li>`).join('')}</ul></section>` : '';
+}
+
+// ---- Research ----
+function researchScores(d){
+  const tw = d.crit.reduce((s, c) => s + 5 * (d.w[c.id] || 0), 0) || 1;
+  return d.opts.map(o => ({...o, pct: Math.round(100 * d.crit.reduce((s, c) => s + o.s[c.id] * (d.w[c.id] || 0), 0) / tw)}));
+}
+function researchHtml(d, v, chg){
+  const C = id => chg.includes(id) ? ' chg' : '';
+  const sc = researchScores(d);
+  const pool = sc.filter(o => !d.short.length || d.short.includes(o.id));
+  const best = pool.slice().sort((a, b) => b.pct - a.pct)[0];
+  const dots = n => '●'.repeat(n) + `<i>${'●'.repeat(5 - n)}</i>`;
+  return `<div class="doc">
+  <p class="eyebrow">Research · v${v}</p>
+  <h1>${esc(d.title)}</h1>
+  <p class="lede">${esc(d.question)}</p>
+  <section class="${C('rec')}"><div class="call"><b>Recommendation: ${esc(best.name)}</b> scores ${best.pct} with your weights${d.short.length ? `, among the ${d.short.length} you shortlisted` : ''}. ${esc(best.why)}</div></section>
+  <section class="${C('weights')}"><h2>Comparison</h2><p class="hint">Change the weights (0 ignores a criterion) and tick the options to keep. Claude re-scores in the next version.</p>
+  <div class="tw"><table><thead><tr><th>Criterion</th><th>Weight</th>${d.opts.map(o => `<th>${esc(o.name)}</th>`).join('')}</tr></thead><tbody>
+  ${d.crit.map(c => `<tr><td>${esc(c.name)}${c.note ? `<small>${esc(c.note)}</small>` : ''}</td><td data-label="Weight: ${esc(c.name)}"><select class="sm" name="w-${c.id}">${[0,1,2,3,4,5].map(n => `<option ${d.w[c.id] === n ? 'selected' : ''}>${n}</option>`).join('')}</select></td>${d.opts.map(o => `<td><span class="dots">${dots(o.s[c.id])}</span></td>`).join('')}</tr>`).join('')}
+  <tr><td>Cost at our size</td><td></td>${d.opts.map(o => `<td class="num" style="text-align:left">${esc(o.cost)}</td>`).join('')}</tr>
+  </tbody><tfoot>
+  <tr class="${C('totals')}"><td>Weighted score</td><td></td>${sc.map(o => `<td><div class="barc"><div class="bar"><i style="width:${o.pct}%"></i></div><b>${o.pct}</b></div></td>`).join('')}</tr>
+  <tr><td>Shortlist</td><td></td>${d.opts.map(o => `<td data-label="Shortlist ${esc(o.name)}"><label class="chk"><input type="checkbox" name="pick-${o.id}" ${d.short.includes(o.id) ? 'checked' : ''}> Keep</label></td>`).join('')}</tr>
+  </tfoot></table></div></section>
+  ${d.bench ? `<section class="${C('bench')}"><h2>Benchmark on our catalog</h2><p class="hint">${esc(d.bench.how)}</p><div class="tw"><table><thead><tr><th>Engine</th><th>p95 latency</th><th class="num">Zero-result queries</th><th class="num">Index 120k products</th><th class="num">RAM</th></tr></thead><tbody>
+    ${d.bench.rows.map(r => `<tr><td>${esc(d.opts.find(o => o.id === r.id).name)}</td><td><div class="barc"><div class="bar"><i style="width:${Math.min(100, r.p95 / 2.4)}%"></i></div><b>${r.p95}</b></div><small>ms</small></td><td class="num">${r.zero}%</td><td class="num">${r.idx}</td><td class="num">${r.ram}</td></tr>`).join('')}
+  </tbody></table></div></section>` : ''}
+  <section><h2>Notes per option</h2><ul>${d.opts.map(o => `<li><b>${esc(o.name)}:</b> ${esc(o.note)}</li>`).join('')}</ul></section>
+  ${askedHtml(d, C)}
+  <section class="notes" data-label="Notes on the research"><h2>Anything else to look into?</h2><textarea name="notes" placeholder="e.g. Check how each one handles synonyms like ‘sofa’ and ‘couch’"></textarea></section>
+</div>`;
+}
+function researchApply(d0, ans){
+  const d = clone(d0), chg = [], said = [];
+  d.crit.forEach(c => { const a = ans['w-' + c.id]; if (a !== undefined && +a !== d.w[c.id]) { said.push(`${c.name}: weight ${d.w[c.id]} → ${a}`); d.w[c.id] = +a; chg.push('weights', 'totals', 'rec'); } });
+  d.opts.forEach(o => { const a = ans['pick-' + o.id]; if (a === undefined) return; const has = d.short.includes(o.id);
+    if (a === 'yes' && !has) { d.short.push(o.id); said.push(`shortlisted ${o.name}`); } if (a === 'no' && has) { d.short = d.short.filter(x => x !== o.id); said.push(`dropped ${o.name}`); } chg.push('rec'); });
+  if (ans.notes?.trim()) { d.asked.push(ans.notes.trim()); chg.push('asked'); said.push('your notes'); }
+  const pool = researchScores(d).filter(o => !d.short.length || d.short.includes(o.id)).sort((a, b) => b.pct - a.pct);
+  return {d, chg, title: `Re-scored with your weights: ${pool[0].name} leads`, note: `${said.length} change${said.length === 1 ? '' : 's'} applied. ${pool[0].name} ${pool[0].pct}, ${pool[1] ? pool[1].name + ' ' + pool[1].pct : ''}.`,
+    msg: `Re-scored with what you set:\n\n${said.map(s => '- ' + s).join('\n')}\n\n**${pool[0].name}** comes out on top with ${pool[0].pct}${pool[1] ? `, ahead of ${pool[1].name} (${pool[1].pct})` : ''}.`, status:'review'};
+}
+
+// ---- Design ----
+function phoneA(o){
+  return `<div class="phone"><div class="scr">
+    <div class="ph-top"><span>9:41</span><span>Order #48213</span></div>
+    <div class="ph-h">Arriving today</div>${o.eta ? '<div class="ph-s">between 14:10 and 14:40</div>' : ''}
+    <ol class="tl"><li class="done">Ordered<small>Mon 09:12</small></li><li class="done">Packed<small>Mon 16:40</small></li><li class="now">Out for delivery<small>Courier is 3 stops away</small></li><li>Delivered</li></ol>
+    ${o.history ? '<div class="ph-card"><b>History</b><span class="muted">Mon 16:58 · Left the warehouse in Gent</span><span class="muted">Tue 07:30 · Loaded on the van</span></div>' : ''}
+    ${o.contact ? '<div class="ph-btn">Contact courier</div>' : ''}
+  </div></div>`;
+}
+function phoneB(o){
+  return `<div class="phone"><div class="scr">
+    <div class="ph-top"><span>9:41</span><span>Order #48213</span></div>
+    <div class="map"><svg viewBox="0 0 220 150" aria-hidden="true"><path d="M0 40H220M0 110H220M60 0V150M160 0V150" style="stroke:var(--line);stroke-width:10;fill:none"/><path d="M30 132 L60 110 L60 40 L160 40 L190 18" style="stroke:var(--accent);stroke-width:4;fill:none;stroke-linecap:round;stroke-linejoin:round"/><circle cx="30" cy="132" r="6" style="fill:var(--add)"/><circle cx="190" cy="18" r="7" style="fill:var(--accent)"/></svg></div>
+    ${o.eta ? '<div class="big">18 min</div><div class="ph-s" style="margin-top:0">Courier is 3 stops away</div>' : '<div class="ph-h">Out for delivery</div><div class="ph-s">Courier is 3 stops away</div>'}
+    ${o.history ? '<ol class="tl"><li class="done">Ordered<small>Mon 09:12</small></li><li class="done">Packed<small>Mon 16:40</small></li><li class="now">Out for delivery</li></ol>' : ''}
+    ${o.contact ? '<div class="ph-btn">Contact courier</div>' : ''}
+  </div></div>`;
+}
+function phoneGeneric(o, k, title){
+  return `<div class="phone"><div class="scr"><div class="ph-top"><span>9:41</span><span>${esc(title.slice(0, 18))}</span></div>
+    <div class="ph-h">${k === 'A' ? 'List' : 'Cards'}</div>
+    ${k === 'A' ? [1,2,3,4,5].map(() => '<div class="sk" style="width:90%"></div><div class="sk" style="width:60%;opacity:.6"></div>').join('') : [1,2,3].map(() => '<div class="ph-card"><div class="sk" style="width:70%"></div><div class="sk" style="width:45%;opacity:.6"></div></div>').join('')}
+    ${o.contact ? '<div class="ph-btn">Primary action</div>' : ''}</div></div>`;
+}
+const VARIANTS = {
+  A: {name:'A · Timeline', why:'Familiar, works without location data. Answers “where is it in the process”.', render: phoneA},
+  B: {name:'B · Live map + ETA', why:'Answers “when will it be here” first. Needs the courier location feed from DPD.', render: phoneB},
+};
+function designHtml(d, v, chg){
+  const C = id => chg.includes(id) ? ' chg' : '';
+  const shown = d.picked ? [d.picked] : d.variants;
+  const render = k => d.generic ? phoneGeneric(d.opts, k, d.title) : VARIANTS[k].render(d.opts);
+  const name = k => d.generic ? `${k} · ${k === 'A' ? 'List' : 'Cards'}` : VARIANTS[k].name;
+  return `<div class="doc">
+  <p class="eyebrow">Prototype · v${v}${d.picked ? ' · refined' : ''}</p>
+  <h1>${esc(d.title)}</h1>
+  <p class="lede">${esc(d.brief)}</p>
+  <section class="${C('screens')}"><h2>${d.picked ? 'The screen' : 'Variants'}</h2>${d.picked ? '' : '<p class="hint">Pick the variant to take forward.</p>'}
+  <div class="screens">${shown.map(k => `<div class="variant${C('v-' + k)}">
+    ${d.picked ? `<b>${esc(name(k))}</b>` : `<label data-label="Variant"><input type="radio" name="variant" value="${k}"> ${esc(name(k))}</label>`}
+    ${render(k)}${d.generic ? '' : `<p>${esc(VARIANTS[k].why)}</p>`}</div>`).join('')}</div></section>
+  <section class="${C('opts')}"><h2>What goes on it</h2><div class="opts">
+    ${[['eta','Show an ETA'],['contact','Show “Contact courier”'],['history','Show the full status history']].map(([k, l]) => `<label data-label="${esc(l)}"><input type="checkbox" name="opt-${k}" ${d.opts[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}
+  </div></section>
+  ${d.picked && !d.generic ? `<section class="${C('spec')}"><h2>Status texts</h2><div class="tw"><table class="spec"><tbody>
+    <tr><td>Ordered</td><td>“We’ve got your order.”</td></tr><tr><td>Packed</td><td>“Packed and waiting for the courier.”</td></tr>
+    <tr><td>Out for delivery</td><td>${d.opts.eta ? '“Arriving in {minutes} min.”' : '“On its way today.”'}</td></tr><tr><td>Delivered</td><td>“Delivered at {time}. Not there? Tell us.”</td></tr>
+  </tbody></table></div></section>` : ''}
+  ${askedHtml(d, C)}
+  <section class="notes" data-label="Notes on the design"><h2>Anything to change?</h2><textarea name="notes" placeholder="e.g. Make the ETA smaller, it shouts"></textarea></section>
+</div>`;
+}
+function designApply(d0, ans){
+  const d = clone(d0), chg = [], said = [];
+  if (ans.variant && ans.variant !== d.picked) { d.picked = ans.variant; chg.push('screens', 'v-' + ans.variant, 'spec'); said.push(`took variant ${ans.variant} forward`); }
+  ['eta','contact','history'].forEach(k => { const a = ans['opt-' + k]; if (a === undefined) return; const on = a === 'yes'; if (on !== d.opts[k]) { d.opts[k] = on; chg.push('opts', 'screens'); said.push(`${on ? 'added' : 'removed'} ${k === 'eta' ? 'the ETA' : k === 'contact' ? 'Contact courier' : 'the status history'}`); } });
+  if (ans.notes?.trim()) { d.asked.push(ans.notes.trim()); chg.push('asked'); said.push('your notes'); }
+  return {d, chg, title: d.picked ? `Refined variant ${d.picked}` : 'Updated both variants', note: said.join(', ') + '.',
+    msg: `${said.map(s => s[0].toUpperCase() + s.slice(1)).join('. ')}.${d.picked && !d.generic ? ' Added the status texts so copy can review them.' : ''}`, status:'review'};
+}
+
+// ---- Notes (any other task) ----
+function notesHtml(d, v, chg){
+  const C = id => chg.includes(id) ? ' chg' : '';
+  return `<div class="doc"><p class="eyebrow">Notes · v${v}</p><h1>${esc(d.title)}</h1><p class="lede">${esc(d.summary)}</p>
+  <section class="${C('steps')}"><h2>Proposed next steps</h2><p class="hint">Tick the ones Claude should do.</p><div class="opts">${d.steps.map((s, i) => `<label data-label="${esc(s.t)}"><input type="checkbox" name="step-${i}" ${s.on ? 'checked' : ''} ${s.done ? 'disabled' : ''}> ${esc(s.t)}${s.done ? ' <span class="muted">· done</span>' : ''}</label>`).join('')}</div></section>
+  ${askedHtml(d, C)}
+  <section class="notes" data-label="Notes"><h2>Anything else?</h2><textarea name="notes"></textarea></section></div>`;
+}
+function notesApply(d0, ans){
+  const d = clone(d0), chg = ['steps'], said = [];
+  d.steps.forEach((s, i) => { if (ans['step-' + i] === 'yes' && !s.done) { s.done = true; s.on = true; said.push(s.t); } });
+  if (ans.notes?.trim()) { d.asked.push(ans.notes.trim()); chg.push('asked'); said.push('your notes'); }
+  return {d, chg, title: `Did ${said.length} step${said.length === 1 ? '' : 's'}`, note: said.join(', ') + '.', msg: said.map(s => '- ' + s).join('\n'), status:'review'};
+}
+
+const GEN = {
+  scope: {kind:'Scope', html: scopeHtml, apply: scopeApply},
+  research: {kind:'Report', html: researchHtml, apply: researchApply},
+  design: {kind:'Prototype', html: designHtml, apply: designApply},
+  notes: {kind:'Notes', html: notesHtml, apply: notesApply},
+};
+
+// =====================================================================
+// Code: repos, files and references (each repo's dyffle base index)
+// =====================================================================
+const REPOS = {
+  'shop-api': {kind:'NestJS', mods:['', 'auth','users','orders','invoices','common'], pr:141},
+  'shop-web': {kind:'Vue', mods:['', 'pages','components','composables','api'], pr:57},
+};
+const repoOf = p => p.split('/')[0];
+const rel = p => p.slice(repoOf(p).length + 1);
+const modOf = p => { const r = rel(p).split('/'); return r.length <= 2 ? '' : r[1]; };
+const modLabel = (repo, m) => REPOS[repo].kind === 'NestJS' ? (m ? m[0].toUpperCase() + m.slice(1) + 'Module' : 'AppModule') : (m || 'src');
+const A = p => 'shop-api/' + p, V = p => 'shop-web/' + p;
+const EDGES = [
+  ['src/app.module.ts','src/auth/auth.module.ts'], ['src/auth/auth.module.ts','src/auth/jwt.strategy.ts'],
+  ['src/auth/jwt.strategy.ts','src/users/users.service.ts'], ['src/users/users.controller.ts','src/users/users.service.ts'],
+  ['src/users/users.service.ts','src/users/user.entity.ts'],
+  ['src/orders/orders.controller.ts','src/orders/orders.service.ts'], ['src/orders/orders.controller.ts','src/orders/dto/list-orders.dto.ts'],
+  ['src/orders/orders.service.ts','src/common/pagination.ts'], ['src/orders/orders.service.ts','src/invoices/invoices.service.ts'],
+  ['src/orders/dto/list-orders.dto.ts','src/common/pagination.ts'], ['src/invoices/invoices.service.ts','src/invoices/vat.ts'],
+].map(([a, b]) => [A(a), A(b)]).concat([
+  ['src/router.ts','src/pages/OrdersPage.vue'], ['src/pages/OrdersPage.vue','src/components/OrderList.vue'],
+  ['src/pages/OrdersPage.vue','src/api/orders.ts'], ['src/components/OrderList.vue','src/components/OrderRow.vue'],
+  ['src/api/orders.ts','src/api/http.ts'],
+].map(([a, b]) => [V(a), V(b)]));
+
+// A hunk is one line per diff line, prefixed with "+", "-" or " ".
+const H = (o, n, text) => ({o, n, lines: text.split('\n')});
+const DIFFS = {
+  dto: [H(0,1,`+import { Type } from 'class-transformer';
++import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
++
++export class ListOrdersDto {
++  @IsOptional()
++  @IsString()
++  cursor?: string;
++
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(1)
++  @Max(100)
++  limit = 20;
++}`)],
+  pagination: [H(0,1,`+export interface Page<T> {
++  items: T[];
++  nextCursor: string | null;
++}
++
++export function toPage<T extends { id: string }>(rows: T[], limit: number): Page<T> {
++  const items = rows.slice(0, limit);
++  const more = rows.length > limit;
++  return { items, nextCursor: more ? items[items.length - 1].id : null };
++}`)],
+  ordersSvc: [H(31,31,`-  findAll(userId: string) {
+-    return this.repo.find({ where: { userId }, order: { createdAt: 'DESC' } });
++  async findAll(userId: string, { cursor, limit }: ListOrdersDto) {
++    const rows = await this.repo.find({
++      where: { userId, ...(cursor && { id: LessThan(cursor) }) },
++      order: { id: 'DESC' },
++      take: limit + 1,
++    });
++    return toPage(rows, limit);
+   }`)],
+  ordersCtl: [H(17,17,`   @Get()
+-  findAll(@Req() req: AuthedRequest) {
+-    return this.orders.findAll(req.user.sub);
++  findAll(@Req() req: AuthedRequest, @Query() query: ListOrdersDto) {
++    return this.orders.findAll(req.user.sub, query);
+   }`)],
+  webOrdersApi: [H(4,4,`-export function listOrders(): Promise<Order[]> {
+-  return http.get('/orders');
++export interface OrderPage {
++  items: Order[];
++  nextCursor: string | null;
++}
++
++export function listOrders(cursor?: string): Promise<OrderPage> {
++  return http.get('/orders', { params: { cursor, limit: 20 } });
+ }`)],
+  // The script tags are escaped: a literal closing tag would end this page's own script.
+  webOrdersPage: [H(1,1,` <\script setup lang="ts">
+ import { listOrders } from '@/api/orders';
+-const orders = ref<Order[]>([]);
+-onMounted(async () => { orders.value = await listOrders(); });
++const orders = ref<Order[]>([]);
++const cursor = ref<string | null>(null);
++
++async function loadMore() {
++  const page = await listOrders(cursor.value ?? undefined);
++  orders.value.push(...page.items);
++  cursor.value = page.nextCursor;
++}
++onMounted(loadMore);
+ <\/script>`), H(14,21,`   <OrderList :orders="orders" />
++  <button v-if="cursor" class="more" @click="loadMore">Load more</button>
+ </template>`)],
+};
+
+// =====================================================================
+// Workspaces and agents. A workspace is one goal, with or without repos.
+// Its agents are peers with a role; each is its own Claude Code session
+// with its own thread. All agents share the workspace's artifacts and,
+// on code, its branch.
+// =====================================================================
+const ROLES = {
+  scoper: {name:'Scoper', gen:'scope'},
+  researcher: {name:'Researcher', gen:'research'},
+  designer: {name:'Designer', gen:'design'},
+  coder: {name:'Coder', gen:null},
+  reviewer: {name:'Reviewer', gen:null},
+};
+function mkWs(o){
+  const w = Object.assign({repos:[], branch:'', changes:{}, posts:[], feed:[], comments:[], viewed:{}, edges:[], arts:[], cur:null, rf:'all', agents:[], thread:null, to:null, unread:false, chatNew:false, overall:'', prs:{}, routes:{}}, o);
+  w.bases ||= Object.fromEntries(w.repos.map(r => [r, 'main']));
+  return w;
+}
+function mkAgent(w, role){
+  const same = w.agents.filter(a => a.role === role).length;
+  const ag = {id: role + (same + 1), role, name: ROLES[role].name + (same ? ' ' + (same + 1) : ''), status:'idle', now:'', timers:[], unread:false};
+  w.agents.push(ag); return ag;
+}
+function mkArt(w, o){
+  const a = Object.assign({id:'a' + (w.arts.length + 1), versions:[], view:null, answers:{}, defaults:{}, labels:{}, texts:{}}, o);
+  w.arts.push(a); w.cur ||= a.id; return a;
+}
+const W = [
+  mkWs({id:'checkout', title:'Checkout v2', dir:'checkout-v2'}),
+  mkWs({id:'search', title:'Catalog search', dir:'catalog-search'}),
+  mkWs({id:'tracking', title:'Order tracking page', dir:'order-tracking', repos:['shop-web'], branch:'hans/order-tracking'}),
+  mkWs({id:'orders', title:'Orders pagination', dir:'orders-pagination', repos:['shop-api','shop-web'], branch:'hans/orders-pagination',
+    routes:{'shop-api':['GET /orders'], 'shop-web':['PAGE /orders']}}),
+];
+const byId = id => W.find(w => w.id === id);
+const multi = w => w.repos.length > 1;
+const shown = (w, s) => w.repos.length === 1 ? s.split(w.repos[0] + '/').join('') : s;
+const artOf = (w, id) => w.arts.find(a => a.id === id);
+const curArt = w => artOf(w, w.cur);
+const latest = a => a.versions.length;
+const agOf = (w, id) => w.agents.find(a => a.id === id);
+// The chat shows one agent's thread at a time: the one picked, else the first.
+const threadOf = w => agOf(w, w.thread) || w.agents[0];
+const STATUS = {running:'Running', input:'Needs input', review:'Ready for review', idle:'Idle'};
+// A workspace shows the state that most needs you, across its agents.
+function wsStatus(w){
+  const ss = w.agents.map(a => a.status);
+  if (ss.includes('input')) return 'input';
+  if (ss.includes('review')) return 'review';
+  if (ss.includes('running')) return 'running';
+  return Object.keys(w.prs).length ? 'pr' : 'idle';
+}
+
+// ---- Steps an agent run plays back: [kind, arg], with a delay in front when run live ----
+const tool = t => ['tool', t];
+const edit = (path, s, hunks, syms) => ['edit', {path, s, hunks, syms}];
+function step(w, ag, [kind, arg]){
+  if (kind === 'tool') { w.feed.push({k:'tool', ag: ag.id, text: arg}); ag.now = arg; }
+  else if (kind === 'edit') { ensureMap(w); const c = w.changes[arg.path]; if (c && c.posts.length) c.dirty = true; applyEdit(w, arg); }
+  else if (kind === 'post') addPost(w, ag, arg);
+  else if (kind === 'version') addVersion(w, ag, arg);
+  else if (kind === 'note') addNote(w, ag, arg);
+  else if (kind === 'status') { ag.status = arg; ag.now = ''; if (arg !== 'idle') w.feed.push({k:'status', ag: ag.id, text: arg === 'input' ? 'Needs your input' : 'Ready for review'}); }
+}
+const ensureMap = w => w.arts.find(a => a.kind === 'dyffle') || mkArt(w, {kind:'dyffle', title:'Branch map', view:'live'});
+function applyEdit(w, {path, s, hunks, syms}){
+  const c = w.changes[path];
+  if (c) { c.hunks = c.hunks.concat(hunks); (syms || []).forEach(y => { if (!c.syms.some(z => z.n === y.n)) c.syms.push(y); }); }
+  else w.changes[path] = {s, hunks:[...hunks], syms:[...(syms || [])], posts:[]};
+  w.changes[path].fresh = Date.now();
+}
+// A code post is a checkpoint of the branch map: every file edited since the previous one, by any agent.
+function addPost(w, ag, p){
+  const id = w.posts.length + 1, art = ensureMap(w);
+  const files = Object.keys(w.changes).filter(f => !w.changes[f].posts.length || w.changes[f].dirty);
+  let a = 0, d = 0;
+  files.forEach(f => { const c = w.changes[f]; c.posts.push(id); c.dirty = false; const s = stat(c.hunks.slice(c.seen || 0)); a += s.a; d += s.d; c.seen = c.hunks.length; });
+  w.posts.push({id, ag: ag.id, t: p.t || now(), title: p.title, msg: p.msg, art: art.id, v: id, files, a, d, tests: p.tests, routes: p.routes || 0});
+  w.feed.push({k:'post', ag: ag.id, id});
+}
+// An artifact post adds a version: the generator renders the new data, marking what changed.
+function addVersion(w, ag, {art: id, d, chg = [], note, title, msg, t}){
+  const art = artOf(w, id), atLatest = art.view === null || art.view === latest(art);
+  const v = latest(art) + 1;
+  art.data = d;
+  art.versions.push({v, html: GEN[art.gen].html(d, v, chg), note, t: t || now(), ag: ag.id});
+  if (atLatest) art.view = v;
+  const pid = w.posts.length + 1;
+  w.posts.push({id: pid, ag: ag.id, t: t || now(), title, msg, art: id, v});
+  w.feed.push({k:'post', ag: ag.id, id: pid});
+}
+// A note is a post without an artifact: a review, a question, a status update.
+function addNote(w, ag, {title, msg, t}){
+  const id = w.posts.length + 1;
+  w.posts.push({id, ag: ag.id, t: t || now(), title, msg});
+  w.feed.push({k:'post', ag: ag.id, id});
+}
+function play(w, ag, steps){ steps.forEach(s => step(w, ag, s)); }
+function run(w, ag, steps){
+  stop(w, ag, true);
+  ag.status = 'running'; ag.now = 'Thinking…';
+  let t = 0;
+  steps.forEach(([ms, ...s]) => {
+    t += ms;
+    ag.timers.push(setTimeout(() => {
+      step(w, ag, s);
+      if (s[0] === 'status') { if (w.id !== state.cur) w.unread = true; else if (threadOf(w) !== ag) ag.unread = true; }
+      if (!state.chat && ['post', 'version', 'note', 'status'].includes(s[0])) w.chatNew = true;
+      refresh(w, s[0] === 'edit' ? s[1].path : null, s[0] === 'version' || s[0] === 'post');
+    }, t));
+  });
+  refresh(w);
+}
+function stop(w, ag, quiet){
+  ag.timers.forEach(clearTimeout); ag.timers = [];
+  if (!quiet && ag.status === 'running') { ag.status = 'idle'; ag.now = ''; w.feed.push({k:'status', ag: ag.id, text:'Stopped'}); refresh(w); }
+}
+const stat = hunks => { let a = 0, d = 0; hunks.forEach(h => h.lines.forEach(l => { if (l[0] === '+') a++; else if (l[0] === '-') d++; })); return {a, d}; };
+const wsStat = (w, repo) => { let a = 0, d = 0; Object.entries(w.changes).forEach(([p, c]) => { if (repo && repoOf(p) !== repo) return; const s = stat(c.hunks); a += s.a; d += s.d; }); return {a, d}; };
+const worktreeNote = w => `Started in <code>../acme.tasks/${w.dir}/</code>${w.repos.length ? ` on <code>${esc(w.branch)}</code>` : ''}`;
+
+// ---- Seed: play each workspace's history ----
+(function seed(){
+  // Checkout v2: a Scoper and a Reviewer
+  const s = byId('checkout'), scoper = mkAgent(s, 'scoper'), sreview = mkAgent(s, 'reviewer');
+  const sa = mkArt(s, {kind:'html', gen:'scope', title:'Scope: Checkout v2'});
+  const scope1 = {title:'Checkout v2', status:'draft', goal:'Let customers check out in under a minute on mobile, without an account, and bring mobile checkout drop-off down from 38% to 25%.',
+    metrics:[['Mobile checkout drop-off','38%','→ 25%'],['Median time to pay','2 min 40 s','→ under 60 s'],['Orders placed as guest','0%','→ at least 30%']],
+    items:[
+      {id:'guest', text:'Guest checkout with only an email address', est:null, scope:'in'},
+      {id:'wallets', text:'Apple Pay and Google Pay', est:null, scope:'in'},
+      {id:'addr', text:'Address lookup by postcode (NL and BE)', est:null, scope:'in'},
+      {id:'onepage', text:'One page instead of the 4-step flow', est:null, scope:'in'},
+      {id:'save', text:'Save card for next time', est:null, scope:'later'},
+      {id:'promo', text:'Promo codes in checkout', est:null, scope:'out'},
+      {id:'b2b', text:'Business details (company, VAT number)', est:null, scope:'later'},
+    ], questions:[], decisions:[], risks:['Address lookup depends on a postcode API we don’t have a contract for yet.'], asked:[]};
+  const scope2 = clone(scope1);
+  const est = {guest:5, wallets:4, addr:3, onepage:8, save:3, promo:2, b2b:3};
+  scope2.items.forEach(i => i.est = est[i.id]);
+  scope2.items.find(i => i.id === 'b2b').note = 'Waiting on your answer below';
+  scope2.items.find(i => i.id === 'onepage').note = 'Biggest item: the 4 steps share state through the URL today';
+  scope2.questions = [
+    {id:'track', short:'Guest order tracking', q:'Can guests follow their order without making an account?', why:'Support gets ~40 “where is my order” mails a day; most come from people without an account.', options:['Yes, through a link in the confirmation email','No, offer an account after checkout']},
+    {id:'psp', short:'Wallet payments provider', q:'Which payment provider handles Apple Pay and Google Pay?', why:'Mollie runs our card payments today. Stripe and Adyen came up in the interviews.', options:['Mollie, as today','Stripe','Adyen']},
+    {id:'b2b', short:'Business customers', q:'Do business customers (company and VAT number) need to be in v2?', why:'11% of last month’s orders asked for an invoice with a VAT number by email.', options:['Yes, in scope','Later','Out']},
+  ];
+  scope2.status = 'draft, 3 open questions';
+  s.feed.push({k:'status', text: worktreeNote(s)}, {k:'prompt', ag: scoper.id, t:'10:02', text:'Scope checkout v2. Product wants guest checkout and wallets; mobile drop-off is 38%. Figure out what v2 contains and what it costs.'});
+  play(s, scoper, [tool('Read notes/checkout-interviews-2026-10.md'), tool('Read exports/checkout-funnel-30d.csv'), tool('WebFetch postcode.tech/docs pricing'),
+    ['version', {art: sa.id, d: scope1, chg: [], t:'10:14', note:'First outline from the funnel export and 6 interviews.', title:'First outline',
+      msg:'Drafted a first outline from the funnel export and the 6 customer interviews. Goal and success metrics are in; items have no estimates yet.'}],
+    tool('Grep checkout in shop-web (read-only)'), tool('Read shop-api/src/orders/orders.controller.ts'),
+    ['version', {art: sa.id, d: scope2, chg: ['items', 'questions'], t:'10:31', note:'Estimates per item, and 3 questions only you can answer.', title:'Estimates and 3 open questions',
+      msg:'Estimated every item against the current checkout code: **20 days** in scope. One page instead of 4 steps is the biggest at 8 days.\n\nI need **3 answers** before I can finish. They’re at the bottom of the scope; you can also set items to In, Later or Out.'}],
+    ['status', 'input']]);
+  s.feed.push({k:'prompt', ag: sreview.id, t:'10:33', text:'Challenge the scope’s estimates against the code.'});
+  play(s, sreview, [tool('Read Scope: Checkout v2 v2'), tool('Grep useCheckoutStore in shop-web (read-only)'),
+    ['note', {t:'10:38', title:'Two estimates look low', msg:'- **One page instead of the 4-step flow** (8 d): the steps share state through the URL and `useCheckoutStore`. Untangling that alone is about 4 days; I’d plan 11.\n- **Address lookup** (3 d): add a day for a fallback when the postcode API is down.\n\nI left the scope as it is. Answer the Scoper’s questions first; then either of us can post v3.'}],
+    ['status', 'review']]);
+
+  // Catalog search: a Researcher, mid-run at boot
+  const r = byId('search'), researcher = mkAgent(r, 'researcher');
+  const ra = mkArt(r, {kind:'html', gen:'research', title:'Search engines compared'});
+  const res1 = {title:'Search engines for the product catalog', question:'The shop’s search runs on SQL LIKE queries: no typo tolerance, no facets, 9% of searches find nothing. Which engine should replace it?',
+    crit:[{id:'rel', name:'Relevance and typo tolerance'},{id:'facets', name:'Facets and filters'},{id:'lang', name:'Dutch and French', note:'Stemming, compound words'},{id:'ops', name:'Ops effort', note:'Higher is less work'},{id:'cost', name:'Cost', note:'Higher is cheaper'}],
+    opts:[
+      {id:'meili', name:'Meilisearch', s:{rel:5,facets:4,lang:3,ops:4,cost:4}, cost:'€90/mo cloud', note:'Best typo handling out of the box. Dutch compound words need a custom dictionary.', why:'Strongest relevance with little tuning, and cheap at our size.'},
+      {id:'typesense', name:'Typesense', s:{rel:4,facets:4,lang:3,ops:4,cost:5}, cost:'€60/mo cloud', note:'Very close to Meilisearch, cheaper; smaller ecosystem of Vue components.', why:'Close to Meilisearch for less money.'},
+      {id:'elastic', name:'Elasticsearch', s:{rel:4,facets:5,lang:5,ops:2,cost:2}, cost:'€320/mo cloud', note:'The only one with proper Dutch and French analyzers, but needs someone who knows it.', why:'The best language support, if you can carry the ops work.'},
+      {id:'pg', name:'Postgres full text', s:{rel:2,facets:3,lang:3,ops:5,cost:5}, cost:'€0, existing DB', note:'No new service. Typo tolerance only through pg_trgm, which gets slow past 100k rows.', why:'Nothing new to run.'},
+    ], w:{rel:3, facets:3, lang:3, ops:2, cost:2}, short:[], bench:null, asked:[]};
+  r.feed.push({k:'status', text: worktreeNote(r)}, {k:'prompt', ag: researcher.id, t:'11:05', text:'Compare search engines to replace our LIKE-based product search. 120k products, Dutch and French. Recommend one.'});
+  play(r, researcher, [tool('Read shop-api/src/products/products.search.ts'), tool('WebFetch meilisearch.com/pricing'), tool('WebFetch typesense.org/docs'), tool('WebFetch elastic.co/pricing'),
+    ['version', {art: ra.id, d: res1, chg: [], t:'11:26', note:'4 engines scored on 5 criteria from their docs and pricing.', title:'4 engines compared',
+      msg:'Scored 4 engines on 5 criteria from their docs and pricing pages. **Meilisearch** leads with the default weights. Running a benchmark on our own catalog next.'}],
+    tool('Bash docker compose -f bench/compose.yml up -d')]);
+
+  // Order tracking page: a Designer and a Coder on shop-web
+  const g = byId('tracking'), designer = mkAgent(g, 'designer'), gcoder = mkAgent(g, 'coder');
+  const ga = mkArt(g, {kind:'html', gen:'design', title:'Order tracking prototype'});
+  const des1 = {title:'Order tracking page', brief:'The page behind the “Track your order” link. Most visits are on a phone, on the day of delivery.', variants:['A'], picked:null, opts:{eta:true, contact:false, history:false}, asked:[]};
+  const des2 = clone(des1); des2.variants = ['A', 'B'];
+  g.feed.push({k:'status', text: worktreeNote(g)}, {k:'prompt', ag: designer.id, t:'12:40', text:'Prototype the order tracking page for mobile. Show me a couple of directions.'});
+  play(g, designer, [tool('Read exports/tracking-page-visits.csv'), tool('Write prototype/tracking-a.html'),
+    ['version', {art: ga.id, d: des1, chg: [], t:'12:52', note:'A timeline of the order’s steps.', title:'Variant A: timeline', msg:'A first direction: a timeline of the order’s steps, with the delivery window on top.'}],
+    tool('Write prototype/tracking-b.html'),
+    ['version', {art: ga.id, d: des2, chg: ['v-B'], t:'13:05', note:'Added variant B: live map and ETA.', title:'Added variant B: live map and ETA',
+      msg:'Added a second direction that leads with **when** instead of **where**: a live map and an ETA in minutes. It needs DPD’s courier location feed.\n\nPick one and set what goes on it; I’ll refine that one.'}],
+    ['status', 'review']]);
+  g.feed.push({k:'prompt', ag: gcoder.id, t:'13:06', text:'Build the tracking page in shop-web once a variant is picked.'});
+  play(g, gcoder, [tool('Read Order tracking prototype v2'), tool('Read shop-web/src/router.ts'),
+    ['note', {t:'13:09', title:'Waiting for a variant', msg:'Read the prototype and the router. I’ll build the variant you pick as `src/pages/OrderTrackingPage.vue`, on `/orders/:id/track`.\n\nVariant B needs DPD’s location feed, which shop-web doesn’t call yet: about 2 extra days.'}],
+    ['status', 'idle']]);
+
+  // Orders pagination: a Coder and a Reviewer on both repos
+  const o = byId('orders'), ocoder = mkAgent(o, 'coder'), oreview = mkAgent(o, 'reviewer');
+  o.feed.push({k:'status', text: worktreeNote(o)}, {k:'prompt', ag: ocoder.id, t:'14:11', text:'Paginate the orders list with a cursor, in the API and the web app. Default 20 per page, max 100.'});
+  play(o, ocoder, [tool('Read ' + A('src/orders/orders.service.ts')), tool('Read ' + V('src/pages/OrdersPage.vue')),
+    tool('Write ' + A('src/orders/dto/list-orders.dto.ts')), edit(A('src/orders/dto/list-orders.dto.ts'),'added',DIFFS.dto,[{n:'ListOrdersDto',s:'added'}]),
+    tool('Write ' + A('src/common/pagination.ts')), edit(A('src/common/pagination.ts'),'added',DIFFS.pagination,[{n:'Page',s:'added'},{n:'toPage',s:'added'}]),
+    tool('Edit ' + A('src/orders/orders.service.ts')), edit(A('src/orders/orders.service.ts'),'modified',DIFFS.ordersSvc,[{n:'OrdersService.findAll',s:'modified'}]),
+    tool('Bash (shop-api) npm test -- orders'),
+    ['post', {t:'14:16', title:'Add ListOrdersDto and a toPage helper', tests:'shop-api: 38 passed', routes:1,
+      msg:'Started in shop-api. Added `ListOrdersDto` and a `toPage` helper in `src/common/pagination.ts`. `OrdersService.findAll` now fetches `limit + 1` rows ordered by id, so it knows whether there is a next page.'}],
+    tool('Edit ' + A('src/orders/orders.controller.ts')), edit(A('src/orders/orders.controller.ts'), 'modified', DIFFS.ordersCtl, [{n:'OrdersController.findAll', s:'modified'}]),
+    tool('Edit ' + V('src/api/orders.ts')), edit(V('src/api/orders.ts'), 'modified', DIFFS.webOrdersApi, [{n:'listOrders', s:'modified'}, {n:'OrderPage', s:'added'}]),
+    tool('Edit ' + V('src/pages/OrdersPage.vue')), edit(V('src/pages/OrdersPage.vue'), 'modified', DIFFS.webOrdersPage, [{n:'OrdersPage.vue', s:'modified'}, {n:'loadMore', s:'added'}]),
+    tool('Bash (shop-web) npm run type-check'),
+    ['post', {t:'14:29', title:'Return a page from the API and load more in the web app', tests:'shop-api: 40 passed · shop-web: types ok', routes:2,
+      msg:'In shop-api, `OrdersController.findAll` takes `ListOrdersDto`, so `GET /orders` returns `{ items, nextCursor }`.\n\nIn shop-web, `listOrders` takes a cursor and `OrdersPage.vue` gets a Load more button through `loadMore`.\n\n- Both repos have to ship together: the old web app breaks on the new response.'}],
+    ['status', 'review']]);
+  o.feed.push({k:'prompt', ag: oreview.id, t:'14:30', text:'Review each checkpoint the Coder posts.'});
+  play(o, oreview, [tool('Bash npx dyffle comments'), tool('Read ' + V('src/pages/OrdersPage.vue')),
+    ['note', {t:'14:34', title:'One issue in OrdersPage.vue', msg:'Checked the second checkpoint.\n\n- `ListOrdersDto` and `toPage` look right; `limit` is capped at 100.\n- `loadMore` appends pages but never resets the cursor when the filter changes, so a new filter keeps loading old pages.'}],
+    ['status', 'review']]);
+  W.forEach(w => Object.values(w.changes).forEach(c => c.fresh = 0));
+})();
+function sig(c){ return c.hunks.length + ':' + stat(c.hunks).a; }
+
+// =====================================================================
+// Rendering
+// =====================================================================
+const state = {cur:'checkout', sel:null, editing:null, tx:false, hl:true, view:{x:0,y:0,k:1}, docKey:null, chat:true};
+const cur = () => byId(state.cur);
+const prLabel = (w, r) => multi(w) ? `${r}#${w.prs[r]}` : `PR #${w.prs[r]}`;
+function statusText(w){
+  const s = wsStatus(w);
+  if (s !== 'pr') return STATUS[s];
+  const rs = Object.keys(w.prs);
+  return rs.length > 1 ? rs.length + ' PRs open' : prLabel(w, rs[0]) + ' open';
+}
+const pill = w => `<span class="pill st-${wsStatus(w)}"><i></i>${statusText(w)}</span>`;
+// What the user changed in an artifact's controls, compared with the version as it was posted.
+function pendingAnswers(a){
+  if (a.kind !== 'html') return [];
+  const v = latest(a), ans = a.answers[v] || {}, def = a.defaults[v] || {};
+  return Object.keys(ans).filter(k => ans[k] !== (def[k] ?? '') && !(ans[k] === '' && def[k] === undefined));
+}
+const pendingCount = w => w.arts.reduce((n, a) => n + pendingAnswers(a).length, 0) + w.comments.length;
+const glyph = w => { const ws = w.title.split(/\s+/); return (ws[0][0] + (ws[1] ? ws[1][0] : ws[0][1] || '')).replace(/^./, c => c.toUpperCase()); };
+
+function renderSide(){
+  $('#wslist').innerHTML = W.map(w => {
+    const s = wsStat(w), last = w.posts[w.posts.length - 1], who = last ? agOf(w, last.ag)?.name : '';
+    const lines = Object.keys(w.changes).length ? `<span class="m"><span class="a">+${s.a}</span> <span class="d">−${s.d}</span></span>` : '';
+    return `<button class="wsi ${w.id === state.cur ? 'on' : ''}" data-ws="${w.id}" aria-label="${esc(w.title)}, ${statusText(w)}">
+      <span class="ico">${esc(glyph(w))}<i class="st-${wsStatus(w)}"></i>${w.unread ? '<b></b>' : ''}</span>
+      <span class="wtx"><span class="wst">${esc(w.title)}</span><span class="wsm">${pill(w)}${who ? `<span>${esc(who)}</span>` : ''}${lines}</span></span>
+    </button>`; }).join('');
+  placeTab();
+}
+// The collapsed chat: a floating button, with a dot when an agent posted since.
+function placeTab(){
+  const t = $('#chattab'), on = $('.wsi.on');
+  t.hidden = state.chat || !on;
+  if (!t.hidden) t.querySelector('b').hidden = !cur().chatNew;
+}
+
+function renderHead(){
+  const w = cur();
+  $('#wtitle').textContent = w.title;
+  let sub = `${w.agents.length} agent${w.agents.length === 1 ? '' : 's'}`;
+  if (w.repos.length) sub += ` · <code>${esc(w.branch)}</code> · ${w.repos.join(', ')}`;
+  $('#wsub').innerHTML = sub;
+  const n = pendingCount(w);
+  const changedRepos = w.repos.filter(r => Object.keys(w.changes).some(p => repoOf(p) === r));
+  const prs = Object.keys(w.prs);
+  const pr = `${prs.length ? `<span class="prlinks">${prs.map(r => `<span>${prLabel(w, r)}</span>`).join('')}</span>` : ''}${changedRepos.length && prs.length < changedRepos.length ? `<button class="btn ghost" id="prbtn">${multi(w) ? 'Open PRs' : 'Open PR'}</button>` : ''}`;
+  $('#wsact').innerHTML = `${pill(w)}${pr}<button class="btn ${n ? 'primary' : 'ghost'}" id="revbtn">Send${n ? ` <span class="n">${n}</span>` : ''}</button>`;
+}
+
+function refOf(w, c){
+  const all = Object.keys(w.changes).concat(allEdges(w).flat());
+  const hit = all.find(p => p === c || p.endsWith('/' + c));
+  if (hit) return hit;
+  for (const [p, ch] of Object.entries(w.changes)) if (ch.syms.some(s => s.n === c || c.startsWith(s.n + '.') || s.n.startsWith(c + '.'))) return p;
+  return null;
+}
+function inl(w, s){
+  return esc(s).replace(/`([^`]+)`/g, (m, c) => { const p = w.repos.length && refOf(w, c); return p ? `<button class="ref" data-path="${p}">${shown(w, c)}</button>` : `<code>${c}</code>`; })
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+function md(w, s){
+  return s.split(/\n\n+/).map(p => {
+    const ls = p.split('\n');
+    return ls.every(l => l.startsWith('- ')) ? '<ul>' + ls.map(l => `<li>${inl(w, l.slice(2))}</li>`).join('') + '</ul>' : `<p>${inl(w, p)}</p>`;
+  }).join('');
+}
+
+// ---- Threads: one per agent, and All ----
+function renderThreads(){
+  const w = cur();
+  const th = threadOf(w)?.id;
+  $('#threads').innerHTML = w.agents.map(a => `<button role="tab" aria-selected="${th === a.id}" data-thread="${a.id}" class="${th === a.id ? 'on' : ''}" title="${esc(a.name)}: ${STATUS[a.status]}"><i class="st-${a.status}"></i>${esc(a.name)}${a.unread ? '<b></b>' : ''}</button>`).join('') +
+    `<button id="addag" aria-label="Add agent" title="Add agent">+</button>`;
+}
+function renderFeed(keepScroll){
+  const w = cur(), f = $('#feed'), th = threadOf(w)?.id, all = false;
+  const atEnd = f.scrollHeight - f.scrollTop - f.clientHeight < 60;
+  const vis = it => all || (!it.ag && !it.ags) || it.ag === th || (it.ags || []).includes(th);
+  const who = id => esc(agOf(w, id)?.name || '');
+  f.innerHTML = w.feed.filter(vis).map(it => {
+    if (it.k === 'tool') { if (!state.tx) return ''; const t = shown(w, it.text), i = t.indexOf(' '); return `<div class="fi tool"><span>›</span><span>${all ? `<i>${who(it.ag)}</i> ` : ''}<b>${esc(t.slice(0, i))}</b> ${esc(t.slice(i + 1))}</span></div>`; }
+    if (it.k === 'status') return `<div class="fi status">${all && it.ag ? who(it.ag) + ': ' : ''}${it.text}</div>`;
+    if (it.k === 'prompt' || it.k === 'user') return `<div class="fi ${it.k}"><span class="who">You${all && it.ag ? ' → ' + who(it.ag) : ''}${it.t ? ' · ' + it.t : ''}</span>${md(w, it.text)}</div>`;
+    if (it.k === 'review') return `<div class="fi review"><span class="who">You${all ? ' → ' + it.ags.map(who).join(', ') : ''} · ${it.t}</span>${it.body ? md(w, it.body) : ''}<ul>${it.lines.map(l => `<li>${l}</li>`).join('')}</ul></div>`;
+    if (it.k === 'post') {
+      const p = w.posts[it.id - 1], art = p.art ? artOf(w, p.art) : null, on = art && w.cur === art.id && art.view === p.v;
+      let chip = '';
+      if (art && art.kind === 'dyffle') {
+        const rs = [...new Set(p.files.map(repoOf))];
+        chip = `<span class="m"><span class="a">+${p.a}</span> <span class="d">−${p.d}</span></span><span>${p.files.length} file${p.files.length === 1 ? '' : 's'}${multi(w) ? ` in ${rs.length === 1 ? rs[0] : rs.length + ' repos'}` : ''}</span>`;
+      } else if (art) chip = `<span>${esc(art.title)}</span><span class="m">v${p.v}</span>`;
+      return `<article class="fi post ${on ? 'sel' : ''}">
+        <header><span class="by">${who(p.ag)}</span><time>${p.t}</time></header>
+        <h3>${esc(p.title)}</h3>
+        <div class="md">${md(w, p.msg)}</div>
+        ${art ? `<button class="chg" data-art="${art.id}" data-ver="${p.v}" aria-label="Open ${esc(art.title)}">${chip}<span class="go" aria-hidden="true">→</span></button>` : ''}
+        ${p.tests ? `<div class="postfoot"><span>${p.tests}</span></div>` : ''}
+      </article>`;
+    }
+    return '';
+  }).join('');
+  if (!keepScroll || atEnd) f.scrollTop = f.scrollHeight;
+  const busy = w.agents.filter(a => a.status === 'running' && (all || a.id === th)), wk = $('#working');
+  wk.hidden = !busy.length;
+  if (busy.length) wk.innerHTML = `<span>● ${all ? esc(busy[0].name) + ': ' : ''}${esc(shown(w, busy[0].now || 'Thinking…'))}${busy.length > 1 ? ` <em>+${busy.length - 1}</em>` : ''}</span><button id="stopbtn" data-ag="${busy[0].id}">Stop</button>`;
+  $('#toline').hidden = !all || !w.agents.length;
+  if (all) {
+    $('#cto').innerHTML = w.agents.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+    if (!agOf(w, w.to)) w.to = (w.agents.find(a => a.status !== 'running') || w.agents[0])?.id;
+    $('#cto').value = w.to;
+  }
+  const target = agOf(w, all ? w.to : th);
+  $('#cin').placeholder = !target ? 'Add an agent first' : target.status === 'running' ? `${target.name} is working…` : `Message ${target.name}…`;
+}
+
+// ---- Stage ----
+function renderStage(refit, freshPath, newVersion){
+  const w = cur(), art = curArt(w);
+  $('#shelf').innerHTML = w.arts.map(a => `<button role="tab" aria-selected="${a.id === w.cur}" class="${a.id === w.cur ? 'on' : ''}" data-tabart="${a.id}">${esc(a.title)}<span class="v">${a.kind === 'dyffle' ? '' : 'v' + latest(a)}</span>${pendingAnswers(a).length ? '<span class="cnt">' + pendingAnswers(a).length + '</span>' : ''}</button>`).join('');
+  if (!art) {
+    $('.stagebar').hidden = true; $('#oldver').hidden = true; $('#mapwrap').hidden = true; $('#docwrap').hidden = false;
+    const host = $('#doc'), root = host.shadowRoot || host.attachShadow({mode:'open'});
+    root.innerHTML = `<style>${KIT}</style><div class="doc"><p class="muted">Nothing here yet. What the agents make shows up here.</p></div>`;
+    state.docKey = null; renderSheet(); return;
+  }
+  $('.stagebar').hidden = false;
+  const isMap = art.kind === 'dyffle';
+  $('#mapwrap').hidden = !isMap; $('#docwrap').hidden = isMap;
+  $('#hlwrap').hidden = isMap; $('#livetag').hidden = !isMap;
+  renderPicker();
+  if (isMap) renderMap(refit, freshPath); else renderDoc(newVersion);
+  renderSheet();
+}
+function renderPicker(){
+  const w = cur(), art = curArt(w), pick = $('#pick'), rf = $('#rfilter'), ov = $('#oldver');
+  const by = id => agOf(w, id)?.name || '';
+  if (art.kind === 'dyffle') {
+    const ps = w.posts.filter(p => p.art === art.id), s = wsStat(w);
+    pick.innerHTML = `<option value="live">Live branch · +${s.a} −${s.d}</option>` + ps.map(p => `<option value="${p.v}">${esc(p.title)} · ${esc(by(p.ag))}</option>`).join('');
+    pick.value = String(art.view);
+    const i = art.view === 'live' ? ps.length + 1 : ps.findIndex(p => p.v === art.view) + 1;
+    $('#prev').disabled = i <= 1; $('#next').disabled = art.view === 'live';
+    rf.hidden = !multi(w);
+    if (multi(w)) rf.innerHTML = [['all', 'All repos']].concat(w.repos.map(r => [r, r])).map(([k, l]) => {
+      const x = k === 'all' ? null : wsStat(w, k);
+      return `<button data-rf="${k}" class="${w.rf === k ? 'on' : ''}">${l}${x ? `<small><span class="a">+${x.a}</span> <span class="d">−${x.d}</span></small>` : ''}</button>`;
+    }).join('');
+    const lt = $('#livetag');
+    lt.className = 'livetag' + (w.agents.some(a => a.status === 'running' && a.role === 'coder') ? ' on' : '');
+    lt.innerHTML = art.view === 'live' ? '<i></i>Live' : `${i}/${ps.length}`;
+    $('#vnote').textContent = ''; ov.hidden = true;
+    return;
+  }
+  rf.hidden = true;
+  pick.innerHTML = art.versions.map(v => `<option value="${v.v}">v${v.v} · ${esc(by(v.ag))} · ${v.t}</option>`).join('');
+  pick.value = String(art.view);
+  $('#prev').disabled = art.view <= 1; $('#next').disabled = art.view >= latest(art);
+  const ver = art.versions[art.view - 1];
+  $('#vnote').textContent = ver ? `${by(ver.ag)}: ${ver.note}` : '';
+  ov.hidden = art.view === latest(art);
+  if (!ov.hidden) ov.innerHTML = `v${art.view} · read-only<button data-gover="${latest(art)}">Latest</button>`;
+}
+function readControls(root){
+  const out = {};
+  root.querySelectorAll('input[name],select[name],textarea[name]').forEach(el => {
+    if (el.type === 'radio') { if (el.checked) out[el.name] = el.value; else if (!(el.name in out)) out[el.name] = ''; }
+    else if (el.type === 'checkbox') out[el.name] = el.checked ? 'yes' : 'no';
+    else out[el.name] = el.value;
+  });
+  return out;
+}
+function renderDoc(force){
+  const w = cur(), art = curArt(w), host = $('#doc');
+  const root = host.shadowRoot || host.attachShadow({mode:'open'});
+  const key = w.id + ':' + art.id + ':' + art.view;
+  if (state.docKey === key && !force) { root.querySelector('.wrap')?.classList.toggle('chg-on', state.hl); return; }
+  const ver = art.versions[art.view - 1];
+  root.innerHTML = `<style>${KIT}</style><div class="wrap ${state.hl ? 'chg-on' : ''}">${ver ? ver.html : ''}</div>`;
+  if (ver) {
+    art.defaults[ver.v] ||= readControls(root);
+    const ans = art.answers[ver.v] || {};
+    root.querySelectorAll('input[name],select[name],textarea[name]').forEach(el => {
+      if (!(el.name in ans)) return;
+      if (el.type === 'radio') el.checked = el.value === ans[el.name];
+      else if (el.type === 'checkbox') el.checked = ans[el.name] === 'yes';
+      else el.value = ans[el.name];
+    });
+    if (ver.v !== latest(art)) root.querySelectorAll('input,select,textarea').forEach(el => el.disabled = true);
+  }
+  if (state.docKey !== key) $('#docwrap').scrollTop = 0;
+  state.docKey = key;
+}
+function onAnswer(e){
+  const el = e.target; if (!el.name) return;
+  const w = cur(), art = curArt(w), v = latest(art);
+  if (art.view !== v) return;
+  const val = el.type === 'checkbox' ? (el.checked ? 'yes' : 'no') : el.value;
+  (art.answers[v] ||= {})[el.name] = val;
+  art.labels[el.name] = el.closest('[data-label]')?.dataset.label || el.name;
+  art.texts[el.name] = el.type === 'checkbox' ? (el.checked ? 'Yes' : 'No') : el.type === 'radio' ? (el.parentElement.textContent.trim()) : el.tagName === 'SELECT' ? el.selectedOptions[0]?.textContent : val;
+  renderHead(); renderShelfOnly();
+}
+function renderShelfOnly(){
+  const w = cur();
+  document.querySelectorAll('#shelf [data-tabart]').forEach(b => {
+    const a = artOf(w, b.dataset.tabart), n = pendingAnswers(a).length, p = b.querySelector('.cnt');
+    if (n && !p) b.insertAdjacentHTML('beforeend', `<span class="cnt">${n}</span>`); else if (p) n ? p.textContent = n : p.remove();
+  });
+}
+
+// ---- Map: one band per repo, module frames inside ----
+const NW = 232, NH = 64, FP = 14, FH = 44, GX = 64, GY = 12, RH = 46, RP = 18, RG = 36;
+const allEdges = w => EDGES.concat(w.edges);
+function nodesFor(w){
+  const changed = new Set(Object.keys(w.changes)), set = new Set(changed);
+  allEdges(w).forEach(([a, b]) => { if (changed.has(a)) set.add(b); if (changed.has(b)) set.add(a); });
+  const paths = [...set].filter(p => w.rf === 'all' || repoOf(p) === w.rf), keep = new Set(paths);
+  return {paths, edges: allEdges(w).filter(([a, b]) => keep.has(a) && keep.has(b))};
+}
+function layout(w){
+  const {paths, edges} = nodesFor(w);
+  const pos = {}, frames = [], bands = [];
+  let y0 = 0, width = 0, ci = 0;
+  w.repos.filter(r => paths.some(p => repoOf(p) === r)).forEach((repo, bi) => {
+    const cols = REPOS[repo].mods.filter(m => paths.some(p => repoOf(p) === repo && modOf(p) === m));
+    let maxH = 0;
+    cols.forEach((m, i) => {
+      const files = paths.filter(p => repoOf(p) === repo && modOf(p) === m).sort((a, b) => (w.changes[b] ? 1 : 0) - (w.changes[a] ? 1 : 0) || a.localeCompare(b));
+      const x = RP + i * (NW + 2 * FP + GX), y = y0 + RH;
+      files.forEach((p, j) => pos[p] = {x: x + FP, y: y + FH + j * (NH + GY), col: ci, band: bi});
+      const h = FH + files.length * (NH + GY) - GY + FP;
+      frames.push({repo, m, x, y, w: NW + 2 * FP, h});
+      maxH = Math.max(maxH, h); ci++;
+    });
+    const bw = 2 * RP + cols.length * (NW + 2 * FP + GX) - GX, bh = RH + maxH + RP;
+    bands.push({repo, y: y0, w: bw, h: bh});
+    width = Math.max(width, bw); y0 += bh + RG;
+  });
+  return {pos, frames, bands, edges, width, height: Math.max(0, y0 - RG)};
+}
+function renderMap(refit, freshPath){
+  const w = cur(), art = curArt(w), L = layout(w), cv = $('#canvas');
+  if (!Object.keys(L.pos).length) { cv.innerHTML = `<div class="empty">Nothing changed${w.rf === 'all' ? '' : ' in ' + w.rf} yet.<br>Claude’s edits show here as they happen.</div>`; cv.dataset.w = 0; cv.dataset.key = ''; return; }
+  const pv = art.view === 'live' ? null : w.posts.find(p => p.art === art.id && p.v === art.view);
+  const inView = p => w.changes[p] && (!pv || pv.files.includes(p));
+  const edges = L.edges.map(([a, b]) => {
+    const P = L.pos[a], Q = L.pos[b];
+    let d;
+    if (P.band !== Q.band) { const x1 = P.x + NW / 2, y1 = P.y + NH, x2 = Q.x + NW / 2, y2 = Q.y - 4; d = `M${x1} ${y1} C${x1} ${y1 + 60} ${x2} ${y2 - 60} ${x2} ${y2}`; }
+    else if (P.col === Q.col) { const x = P.x + NW, y1 = P.y + NH / 2, y2 = Q.y + NH / 2; d = `M${x} ${y1} C${x + 40} ${y1} ${x + 40} ${y2} ${x + 4} ${y2}`; }
+    else if (P.col < Q.col) { const x1 = P.x + NW, x2 = Q.x - 4, y1 = P.y + NH / 2, y2 = Q.y + NH / 2, mx = (x1 + x2) / 2; d = `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`; }
+    else { const x1 = P.x, x2 = Q.x + NW + 4, y1 = P.y + NH / 2, y2 = Q.y + NH / 2, mx = (x1 + x2) / 2; d = `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`; }
+    const hot = state.sel && (a === state.sel || b === state.sel);
+    return `<path class="edge ${hot ? 'hot' : ''}" d="${d}" marker-end="url(#ar${hot ? 'h' : ''})"/>`;
+  }).join('');
+  const bands = L.bands.map(b => { const s = wsStat(w, b.repo); return `<g class="rfr"><rect x="0" y="${b.y}" width="${b.w}" height="${b.h}" rx="16"/><text class="rn" x="${RP}" y="${b.y + 28}">${b.repo}</text><text class="rk" x="${RP + 8 + b.repo.length * 8.6}" y="${b.y + 28}">${REPOS[b.repo].kind} · ${esc(w.branch)} from ${w.bases[b.repo]} · +${s.a} −${s.d}</text></g>`; }).join('');
+  const frames = L.frames.map(f => `<g class="mod"><rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="12"/><text class="mn" x="${f.x + FP}" y="${f.y + 20}">${modLabel(f.repo, f.m)}</text><text class="mp" x="${f.x + FP}" y="${f.y + 35}">src/${f.m ? f.m + '/' : ''}</text></g>`).join('');
+  const nodes = Object.entries(L.pos).map(([p, {x, y}]) => {
+    const c = w.changes[p], on = inView(p);
+    const r = rel(p).split('/'), name = r.pop(), dir = r.slice(1).join('/');
+    const s = c ? stat(c.hunks) : null;
+    const unviewed = c && w.viewed[p] !== sig(c);
+    const cc = w.comments.filter(k => k.path === p).length;
+    const cls = ['node', on ? 's-' + c.s : 'ctx', state.sel === p ? 'sel' : '', freshPath === p ? 'fresh' : ''].join(' ');
+    return `<g class="${cls}" data-path="${p}" transform="translate(${x},${y})" tabindex="0" role="button" aria-label="${name}">
+      <rect class="box" width="${NW}" height="${NH}" rx="9"/><rect class="bar" x="6" y="10" width="3.5" height="${NH - 20}" rx="1.75"/>
+      <text class="nm" x="20" y="27">${esc(name)}</text>
+      <text class="pth" x="20" y="46">${esc(dir ? dir + '/' : 'src/')}</text>
+      ${c ? `<text class="meta" x="${NW - 12}" y="27" text-anchor="end">${on ? `<tspan class="a">+${s.a}</tspan> <tspan class="d">−${s.d}</tspan>` : `not in #${pv.id}`}</text>` : `<text class="meta" x="${NW - 12}" y="27" text-anchor="end">context</text>`}
+      ${unviewed && on ? `<g class="nv" transform="translate(${NW - 30},38)"><title>Not viewed</title><path d="M1 6 C4 1 12 1 15 6 C12 11 4 11 1 6Z"/><circle cx="8" cy="6" r="2"/></g>` : ''}
+      ${cc ? `<g transform="translate(${NW - (unviewed && on ? 50 : 26)},37)"><circle class="cc" cx="7" cy="7" r="8"/><text class="cct" x="7" y="10.5" text-anchor="middle">${cc}</text></g>` : ''}
+    </g>`;
+  }).join('');
+  cv.innerHTML = `<svg width="${L.width + 40}" height="${L.height + 40}" viewBox="-20 -20 ${L.width + 40} ${L.height + 40}">
+    <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow" d="M0 0L8 4L0 8z"/></marker>
+    <marker id="arh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" style="fill:var(--accent)"/></marker></defs>
+    ${bands}${frames}${edges}${nodes}</svg>`;
+  const key = w.id + '|' + w.rf + '|' + L.bands.length, grew = cv.dataset.key !== key;
+  cv.dataset.w = L.width + 40; cv.dataset.h = L.height + 40; cv.dataset.key = key;
+  if (refit || grew) fit(); else applyView();
+}
+function applyView(){ const s = $('#canvas svg'); if (s) s.style.transform = `translate(${state.view.x}px,${state.view.y}px) scale(${state.view.k})`; }
+function fit(){
+  const cv = $('#canvas'), bw = +cv.dataset.w, bh = +cv.dataset.h;
+  if (!bw || !cv.clientWidth) return;
+  const k = Math.min(1.1, (cv.clientWidth - 24) / bw, (cv.clientHeight - 24) / bh);
+  state.view = {k, x: (cv.clientWidth - bw * k) / 2, y: Math.max(8, (cv.clientHeight - bh * k) / 2)};
+  applyView();
+}
+function zoom(f, cx, cy){
+  const cv = $('#canvas'), v = state.view;
+  cx ??= cv.clientWidth / 2; cy ??= cv.clientHeight / 2;
+  const k = Math.min(2.5, Math.max(.2, v.k * f));
+  v.x = cx - (cx - v.x) * k / v.k; v.y = cy - (cy - v.y) * k / v.k; v.k = k; applyView();
+}
+
+// ---- Sheet: one file of the map ----
+function hl(src){
+  const re = /(\/\/.*$)|('[^']*'|`[^`]*`|"[^"]*")|(@\w+)|\b(import|from|export|class|const|let|return|async|await|private|readonly|constructor|extends|if|throw|new|function|interface|null|true|false|this|super|implements)\b/g;
+  let out = '', i = 0;
+  src.replace(re, (m, c, s, d, k, off) => { out += esc(src.slice(i, off)) + `<span class="${c ? 'com' : s ? 'str' : d ? 'dec' : 'kw'}">${esc(m)}</span>`; i = off + m.length; return m; });
+  return out + esc(src.slice(i));
+}
+function symAt(c, code){ return (c.syms.find(s => code.includes(s.n.split('.').pop())) || c.syms[0] || {}).n; }
+function renderSheet(){
+  const w = cur(), p = curArt(w).kind === 'dyffle' ? state.sel : null, sh = $('#sheet');
+  $('#body').classList.toggle('withsheet', !!p);
+  sh.hidden = !p;
+  if (!p) return;
+  const c = w.changes[p], name = p.split('/').pop();
+  const head = `<div class="shhd"><div><h3>${esc(name)}</h3><span class="rtag">${repoOf(p)}</span><code>${esc(rel(p))}</code></div><button class="iconbtn" id="shclose" aria-label="Close">✕</button></div>`;
+  if (!c) {
+    const refs = allEdges(w).filter(e => e.includes(p)).map(([a, b]) => a === p ? `references <code>${b.split('/').pop()}</code>` : `referenced by <code>${a.split('/').pop()}</code>`);
+    sh.innerHTML = head + `<div class="ctxinfo"><p>Unchanged on this branch. It is on the map because it touches changed code:</p><ul>${refs.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
+    return;
+  }
+  const s = stat(c.hunks), v = w.viewed[p], isV = v === sig(c);
+  let rows = '';
+  c.hunks.forEach(h => {
+    let o = h.o, n = h.n;
+    rows += `<div class="hh">@@ −${h.o} +${h.n} @@ ${esc(symAt(c, h.lines.join(' ')) || '')}</div>`;
+    h.lines.forEach(l => {
+      const t = l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : 'ctx', code = l.slice(1);
+      const ol = t === 'add' ? '' : o++, nl = t === 'del' ? '' : n++;
+      const side = t === 'del' ? 'L' : 'R', line = t === 'del' ? ol : nl, key = `${p}|${side}|${line}`;
+      rows += `<div class="dl ${t}"><button class="addc" data-addc="${esc(key)}" data-code="${esc(code)}" aria-label="Comment on line ${line}">+</button><span class="ln">${ol}</span><span class="ln">${nl}</span><span class="cd">${hl(code) || ' '}</span></div>`;
+      w.comments.filter(k => k.key === key).forEach(k => rows += `<div class="thread"><div class="row"><b>You</b><button data-delc="${k.id}">Delete</button></div><p>${esc(k.body)}</p></div>`);
+      if (state.editing && state.editing.key === key) rows += `<div class="thread"><textarea id="cedit" placeholder="Leave a comment for Claude…"></textarea><div class="acts"><button class="btn" id="ccancel">Cancel</button><button class="btn primary" id="csave">Add comment</button></div></div>`;
+    });
+  });
+  sh.innerHTML = head + `
+    <div class="shbar"><span class="pill ${c.s === 'added' ? 'st-review' : 'st-input'}"><i></i>${c.s === 'added' ? 'Added' : 'Modified'}</span>
+      <span class="stl"><span class="a">+${s.a}</span> <span class="d">−${s.d}</span></span>
+      <label class="switch" style="margin-left:auto"><input type="checkbox" id="viewed" ${isV ? 'checked' : ''}> Viewed</label>
+      ${v && !isV ? '<span class="since">Changed since viewed</span>' : ''}</div>
+    <div class="syms">${c.syms.map(y => `<span class="sym ${y.s}">${esc(y.n)}</span>`).join('')}</div>
+    <div class="diff" id="diff">${rows}</div>`;
+  const ed = $('#cedit'); if (ed) ed.focus();
+}
+
+function renderAll(refit){ renderSide(); renderHead(); renderThreads(); renderFeed(); renderStage(refit, null, true); }
+function refresh(w, freshPath, newVersion){
+  renderSide();
+  if (w.id !== state.cur) return;
+  renderHead(); renderThreads(); renderFeed(true);
+  if (!state.editing) renderStage(false, freshPath, newVersion);
+}
+
+// =====================================================================
+// Talking to agents
+// =====================================================================
+const camel = s => { const ws = s.toLowerCase().replace(/[^a-z ]/g, '').split(' ').filter(Boolean).slice(0, 3); return (ws[0] || 'step') + ws.slice(1).map(x => x[0].toUpperCase() + x.slice(1)).join(''); };
+const slug = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim().split(/\s+/).slice(0, 4).join('-') || 'task';
+const shorten = s => { s = s.replace(/\s+/g, ' '); return s.length > 60 ? s.slice(0, 59) + '…' : s; };
+
+// Everything waiting to be sent: changed controls per artifact, and line comments on the map.
+function collect(w){
+  return w.arts.filter(a => pendingAnswers(a).length).map(a => ({a, keys: pendingAnswers(a), ans: {...(a.answers[latest(a)] || {})}}));
+}
+// Answers go to the agent that posted the artifact's latest version; line comments to the agent that last posted on the map.
+const authorOf = (w, a) => agOf(w, a.versions[latest(a) - 1]?.ag) || w.agents[0];
+function coderOf(w){
+  const p = [...w.posts].reverse().find(p => p.art && artOf(w, p.art).kind === 'dyffle');
+  return (p && agOf(w, p.ag)) || w.agents.find(a => a.role === 'coder') || w.agents[0];
+}
+function sendAll(){
+  const w = cur(), groups = collect(w), comments = w.comments.slice(), body = w.overall.trim();
+  if (!groups.length && !comments.length && !body) return;
+  if (!groups.length && !comments.length) { closePop(); w.overall = ''; return talk(w, agOf(w, w.thread) || agOf(w, w.to) || w.agents[0], body); }
+  const plan = new Map(), job = ag => { if (!plan.has(ag)) plan.set(ag, {groups:[], comments:[]}); return plan.get(ag); };
+  groups.forEach(g => job(authorOf(w, g.a)).groups.push(g));
+  if (comments.length) job(coderOf(w)).comments.push(...comments);
+  const busy = [...plan.keys()].filter(a => a.status === 'running');
+  if (busy.length) { toast(`${andList(busy.map(a => a.name))} ${busy.length === 1 ? 'is' : 'are'} busy. Wait for the next post, or stop ${busy.length === 1 ? 'it' : 'them'}.`); return; }
+  const lines = [];
+  groups.forEach(g => g.keys.forEach(k => lines.push(`${esc(g.a.labels[k] || k)}: <b>${esc((g.a.texts[k] || g.ans[k] || '').slice(0, 80))}</b>`)));
+  comments.forEach(c => lines.push(`<code>${esc(shown(w, c.path))}:${c.line}</code> ${esc(c.body)}`));
+  w.feed.push({k:'review', t: now(), body, lines, ags: [...plan.keys()].map(a => a.id)});
+  w.comments = []; w.overall = ''; closePop();
+  let first = true;
+  plan.forEach((jb, ag) => {
+    const steps = [], statuses = [];
+    jb.groups.forEach(g => {
+      const v = latest(g.a), r = GEN[g.a.gen].apply(g.a.data, g.ans);
+      if (body && first && !r.chg.includes('asked')) { r.d.asked = (r.d.asked || []).concat(body); r.chg.push('asked'); }
+      first = false;
+      statuses.push(r.status);
+      g.a.answers[v] = {};
+      steps.push([700, ...tool(`Read answers from “${g.a.title}” v${v}`)], [1600, ...tool(`Write ${g.a.title} v${v + 1}`)],
+        [1200, 'version', {art: g.a.id, d: r.d, chg: r.chg, note: r.note, title: r.title, msg: r.msg}]);
+    });
+    if (jb.comments.length) {
+      const byFile = {};
+      jb.comments.forEach(c => (byFile[c.path] ||= []).push(c));
+      steps.push([700, ...tool('Bash npx dyffle comments' + (multi(w) ? ' (all repos)' : ''))]);
+      Object.entries(byFile).forEach(([path, cs]) => {
+        steps.push([1100, ...tool('Edit ' + path)]);
+        steps.push([400, ...edit(path, w.changes[path].s, cs.map(c => H(c.line, c.line, `+    // ${c.body.replace(/\s+/g, ' ').slice(0, 70)}
+ ${c.code}`)))]);
+      });
+      [...new Set(Object.keys(byFile).map(repoOf))].forEach(r => steps.push([1200, ...tool(`Bash${multi(w) ? ` (${r})` : ''} npm test`)]));
+      steps.push([1500, 'post', {title: `Address review: ${jb.comments.length} comment${jb.comments.length === 1 ? '' : 's'}`, tests: 'all passed',
+        msg: jb.comments.map(c => `- \`${c.symbol || c.path}\`: ${c.body.replace(/\n/g, ' ')} → done`).join('\n')}]);
+      statuses.push('review');
+    }
+    steps.push([300, 'status', statuses.includes('input') ? 'input' : 'review']);
+    run(w, ag, steps);
+  });
+  toast(`Sent to ${andList([...plan.keys()].map(a => a.name))}`);
+}
+
+// What an agent does with a message depends on its role.
+function talk(w, ag, text){
+  w.feed.push({k:'user', ag: ag.id, t: now(), text});
+  run(w, ag, agentSteps(w, ag, text));
+}
+const agentSteps = (w, ag, text) => ROLES[ag.role].gen ? artifactSteps(w, ag, text) : ag.role === 'coder' ? coderSteps(w, text) : reviewerSteps(w, text);
+// Scoper, Researcher, Designer: post a new version of their kind of artifact, or create one.
+function artifactSteps(w, ag, text){
+  const gen = ROLES[ag.role].gen, short = shorten(text);
+  const art = [...w.arts].reverse().find(a => a.gen === gen);
+  if (art) {
+    const d = clone(art.data); d.asked = (d.asked || []).concat(text);
+    return [[900, ...tool(`Read ${art.title} v${latest(art)}`)], [1600, ...tool(`Write ${art.title} v${latest(art) + 1}`)],
+      [1200, 'version', {art: art.id, d, chg: ['asked'], note: 'Your request: ' + short, title: 'Did what you asked: ' + short, msg: `Done. It’s under **Changes you asked for** in v${latest(art) + 1}.`}],
+      [300, 'status', gen === 'scope' && d.questions?.length ? 'input' : 'review']];
+  }
+  const bare = short.replace(/^(scope|compare|prototype|design|research)\s+/i, ''), T = bare[0].toUpperCase() + bare.slice(1);
+  const a = mkArt(w, {kind:'html', gen, title: (gen === 'scope' ? 'Scope: ' : '') + T.slice(0, 40)});
+  let d, title, msg, status = 'review';
+  if (gen === 'scope') {
+    d = {title: T, status:'draft, 2 open questions', goal: text, metrics:[['How we know it worked','to agree','']], items:[
+      {id:'core', text:'The smallest version that delivers it', est:5, scope:'in'}, {id:'measure', text:'Measure it from day one', est:1, scope:'in'},
+      {id:'admin', text:'Admin screens to manage it', est:4, scope:'later'}, {id:'nice', text:'Everything else that came up', est:6, scope:'out'}],
+      questions:[{id:'who', short:'Primary user', q:'Who is this for first?', options:['Customers','Support team','Internal ops']},
+                 {id:'when', short:'Deadline', q:'When does this need to ship?', options:['This sprint','This quarter','No deadline']}],
+      decisions:[], risks:['First pass: nothing checked against the code yet.'], asked:[]};
+    title = 'First outline and 2 questions'; msg = 'A first outline. Answer the **2 questions** and set items to In, Later or Out; I’ll estimate properly in the next version.'; status = 'input';
+  } else if (gen === 'research') {
+    d = {title: T, question: text, crit:[{id:'fit', name:'Fit for the problem'},{id:'effort', name:'Effort to adopt', note:'Higher is less work'},{id:'cost', name:'Cost', note:'Higher is cheaper'},{id:'risk', name:'Vendor risk', note:'Higher is safer'}],
+      opts:[{id:'build', name:'Build it ourselves', s:{fit:5,effort:1,cost:2,risk:5}, cost:'~15 dev days', note:'Exactly what we need, and ours to maintain.', why:'Fits best, but costs the most time.'},
+            {id:'saas', name:'Buy a SaaS tool', s:{fit:3,effort:5,cost:2,risk:2}, cost:'~€200/mo', note:'Live in a week; we bend to its model.', why:'Fastest to have.'},
+            {id:'oss', name:'Open source, self-hosted', s:{fit:4,effort:3,cost:5,risk:4}, cost:'hosting only', note:'Good middle ground if someone owns it.', why:'Cheap and flexible.'}],
+      w:{fit:3, effort:3, cost:2, risk:2}, short:[], bench:null, asked:[]};
+    title = '3 directions compared'; msg = 'Compared the three usual directions. Change the weights and shortlist what you’d consider; I’ll go deeper on those.';
+  } else {
+    d = {title: T, brief: text, variants:['A','B'], picked:null, opts:{eta:false, contact:true, history:false}, asked:[], generic:true};
+    title = 'Two directions'; msg = 'Two directions as a starting point. Pick one and say what to change.';
+  }
+  return [[900, ...tool('Read notes/')], [1300, ...tool(`Write ${a.title} v1`)], [1200, 'version', {art: a.id, d, chg: [], note: 'First version.', title, msg}], [300, 'status', status]];
+}
+// Coder: edits the workspace's branch and posts checkpoints on the branch map.
+function coderSteps(w, text){
+  const short = shorten(text);
+  if (!w.repos.length) return [[900, ...tool('Thinking about ' + short)],
+    [600, 'note', {title:'No repo to work in', msg:'This workspace has no repos, so there’s nothing for me to change. Start a workspace with a repo, or give this to another agent.'}], [300, 'status', 'review']];
+  ensureMap(w);
+  const files = Object.keys(w.changes), target = files.find(f => w.changes[f].s === 'modified') || files[0];
+  if (target) {
+    const last = w.changes[target].hunks.slice(-1)[0], at = last ? last.n + last.lines.length + 4 : 10;
+    return [[900, ...tool('Read ' + target)], [1300, ...tool('Edit ' + target)],
+      [500, ...edit(target, w.changes[target].s, [H(at, at, `   }
++
++  // ${short}
++  private ${camel(text)}() {
++    return this;
++  }`)])],
+      [1400, ...tool(`Bash${multi(w) ? ` (${repoOf(target)})` : ''} npm test`)],
+      [1600, 'post', {title: 'Follow up: ' + short, tests: 'all passed', msg: `Did what you asked in \`${target}\`. Look at the new method at the end of the file.`}],
+      [300, 'status', 'review']];
+  }
+  const name = camel(text), pascal = name[0].toUpperCase() + name.slice(1), steps = [];
+  if (w.repos.includes('shop-api')) {
+    const file = A(`src/common/${slug(text)}.ts`), host = A('src/app.module.ts');
+    w.edges.push([host, file]);
+    steps.push([900, ...tool('Read ' + host)], [1200, ...tool('Write ' + file)],
+      [400, ...edit(file, 'added', [H(0, 1, `+import { Injectable } from '@nestjs/common';
++
++// ${short}
++@Injectable()
++export class ${pascal} {
++  async run(): Promise<void> {}
++}`)], [{n: pascal, s:'added'}])],
+      [1000, ...tool('Edit ' + host)], [400, ...edit(host, 'modified', [H(12, 12, `   providers: [
++    ${pascal},`)], [{n:'AppModule', s:'modified'}])],
+      [1200, ...tool(`Bash${multi(w) ? ' (shop-api)' : ''} npm test`)]);
+  }
+  if (w.repos.includes('shop-web')) {
+    const page = w.id === 'tracking' ? 'OrderTrackingPage' : pascal + 'Page', file = V(`src/pages/${page}.vue`), host = V('src/router.ts');
+    w.edges.push([host, file]);
+    steps.push([900, ...tool('Read ' + host)], [1200, ...tool('Write ' + file)],
+      [400, ...edit(file, 'added', [H(0, 1, `+<\script setup lang="ts">
++// ${short}
++const props = defineProps<{ id: string }>();
++<\/script>
++
++<template>
++  <main class="page">Order {{ props.id }}</main>
++</template>`)], [{n: page + '.vue', s:'added'}])],
+      [1000, ...tool('Edit ' + host)], [400, ...edit(host, 'modified', [H(8, 8, `   routes: [
++    { path: '/orders/:id/track', component: () => import('./pages/${page}.vue'), props: true },`)], [{n:'router', s:'modified'}])],
+      [1200, ...tool(`Bash${multi(w) ? ' (shop-web)' : ''} npm run type-check`)]);
+  }
+  steps.push([1400, 'post', {title: 'First pass: ' + short, tests: 'all passed', msg: `Laid the groundwork${multi(w) ? ' in each repo' : ''}. Comment on the diff or tell me what’s next.`}], [300, 'status', 'review']);
+  return steps;
+}
+// Reviewer: reads every artifact in the workspace and posts a note.
+function reviewerSteps(w, text){
+  const reads = w.arts.filter(a => a.kind === 'dyffle' || a.versions.length).map(a => a.kind === 'dyffle' ? 'the branch map' : `${a.title} v${latest(a)}`);
+  return [...reads.map(r => [800, ...tool('Read ' + r)]),
+    [1400, 'note', {title: 'Review: ' + shorten(text), msg: reads.length ? `Read ${andList(reads)}.\n\n- Nothing blocking.\n- The open questions are the riskiest part: settle them before anyone builds on it.` : 'Nothing to review yet: no agent has posted anything here.'}],
+    [300, 'status', 'review']];
+}
+
+// ---- Popover, modals ----
+function openSend(btn){
+  const w = cur(), pop = $('#pop'), groups = collect(w);
+  const r = btn.getBoundingClientRect();
+  pop.innerHTML = `<h4>Send</h4>
+    ${groups.map(g => `<h5>${esc(g.a.title)} v${latest(g.a)} → ${esc(authorOf(w, g.a).name)}</h5>${g.keys.map(k => `<div class="rc"><div class="ans"><span>${esc(g.a.labels[k] || k)}</span><b>${esc((g.a.texts[k] || g.ans[k] || '—').slice(0, 120))}</b></div></div>`).join('')}`).join('')}
+    ${w.comments.length ? `<h5>Line comments → ${esc(coderOf(w).name)}</h5>${w.comments.map(c => `<div class="rc"><div class="loc"><span>${esc(shown(w, c.path).split('/').slice(-1)[0])}:${c.line}${c.symbol ? ' · ' + esc(c.symbol) : ''}</span><button data-delc="${c.id}">Delete</button></div><pre>${esc(c.code.trim())}</pre>${esc(c.body)}</div>`).join('')}` : ''}
+    ${!groups.length && !w.comments.length ? `<p class="hint" style="margin-top:6px">Nothing changed yet.</p>` : ''}
+    <textarea id="overall" placeholder="Anything else…" style="margin-top:12px">${esc(w.overall)}</textarea>
+    <div class="acts"><button class="btn" id="popclose">Close</button><button class="btn primary" id="sendall">Send</button></div>`;
+  pop.hidden = false;
+  pop.style.top = Math.min(r.bottom + 8, innerHeight - 220) + 'px';
+  pop.style.left = Math.max(16, Math.min(r.right - pop.offsetWidth, innerWidth - pop.offsetWidth - 16)) + 'px';
+}
+function closePop(){ $('#pop').hidden = true; }
+
+function guessRoles(t, repos){
+  t = t.toLowerCase();
+  const r = [];
+  if (/\breview|\bchallenge|\baudit|\bcritique|second opinion/.test(t)) r.push('reviewer');
+  if (/\bscope|requirements|\bplan\b|estimate/.test(t)) r.push('scoper');
+  if (/compare|research|evaluate|which|pick a|alternatives/.test(t)) r.push('researcher');
+  if (/design|prototype|mockup|wireframe|screen/.test(t)) r.push('designer');
+  if (repos.length || /\bfix|bug|implement|refactor|endpoint|build/.test(t)) r.push('coder');
+  return r;
+}
+const roleChips = (name, type, checked) => Object.entries(ROLES).map(([k, x]) => `<label><input type="${type}" name="${name}" value="${k}" ${checked.includes(k) ? 'checked' : ''}><span>${x.name}</span></label>`).join('');
+function openNew(){
+  const branches = ['main', 'develop'];
+  $('#modal').innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="newform">
+    <h3 style="margin-bottom:14px">New workspace</h3>
+    <div class="field"><label for="nw-prompt">Goal</label><textarea id="nw-prompt" rows="4" placeholder="e.g. Scope a loyalty programme: points per euro, rewards, what it costs us." required></textarea></div>
+    <fieldset class="field"><legend>Repos</legend>
+      ${Object.entries(REPOS).map(([r, x]) => `<div class="rpick" data-rp="${r}">
+        <label><input type="checkbox" id="nw-r-${r}"><span><b>${r}</b> <small>${x.kind}</small></span></label>
+        <select id="nw-b-${r}" aria-label="Base branch for ${r}">${branches.map(b => `<option>${b}</option>`).join('')}</select>
+      </div>`).join('')}
+    </fieldset>
+    <div class="field" id="nw-bf"><label for="nw-branch">Branch</label><input id="nw-branch" value="hans/" spellcheck="false"></div>
+    <div class="acts"><button type="button" class="btn" id="mclose">Cancel</button><button class="btn primary" type="submit" id="nw-go">Start</button></div>
+  </form></div>`;
+  let touched = false;
+  const picked = () => Object.keys(REPOS).filter(r => $('#nw-r-' + r).checked);
+  // The agents come from the goal: every role it calls for, a Coder only with a repo, a Scoper if nothing matches.
+  const roles = () => { const rs = picked(), g = guessRoles($('#nw-prompt').value, rs).filter(r => r !== 'coder' || rs.length); return g.length ? g : ['scoper']; };
+  const sync = e => {
+    const rs = picked(), text = $('#nw-prompt').value;
+    if (!touched) $('#nw-branch').value = 'hans/' + slug(text);
+    document.querySelectorAll('.rpick').forEach(el => el.classList.toggle('off', !rs.includes(el.dataset.rp)));
+    $('#nw-bf').hidden = !rs.length;
+    $('#nw-go').disabled = !text.trim();
+  };
+  $('#nw-branch').addEventListener('input', () => { touched = true; sync(); });
+  $('#newform').addEventListener('input', sync);
+  $('#newform').addEventListener('change', sync);
+  sync(); $('#nw-prompt').focus();
+  $('#newform').addEventListener('submit', e => {
+    e.preventDefault();
+    const text = $('#nw-prompt').value.trim(), repos = picked(), rl = roles(); if (!text || !rl.length) return;
+    if (rl.includes('coder') && !repos.length) return;
+    const w = mkWs({id:'w' + Date.now(), title: shorten(text).replace(/^(scope|compare|prototype|design|research|build)\s+/i, m => '').replace(/^./, c => c.toUpperCase()),
+      branch: repos.length ? ($('#nw-branch').value.trim() || 'hans/' + slug(text)) : '', dir: slug(text), repos,
+      bases: Object.fromEntries(repos.map(r => [r, $('#nw-b-' + r).value])), routes: Object.fromEntries(repos.map(r => [r, []]))});
+    W.unshift(w);
+    w.feed.push({k:'status', text: worktreeNote(w)}, {k:'prompt', t: now(), text});
+    const ags = rl.map(r => mkAgent(w, r));
+    closeModal(); select(w.id);
+    ags.forEach(ag => run(w, ag, agentSteps(w, ag, text)));
+  });
+}
+function openAgent(){
+  const w = cur();
+  $('#modal').innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="agform">
+    <h3 style="margin-bottom:14px">Add agent</h3>
+    <div class="field"><label for="ag-text">What should it do?</label><textarea id="ag-text" rows="3" placeholder="e.g. Review the scope against the code" required></textarea></div>
+    <div class="acts"><button type="button" class="btn" id="mclose">Cancel</button><button class="btn primary" type="submit" id="ag-go">Add</button></div>
+  </form></div>`;
+  $('#ag-text').focus();
+  $('#agform').addEventListener('submit', e => {
+    e.preventDefault();
+    const text = $('#ag-text').value.trim(); if (!text) return;
+    // The role comes from the instruction: the first one it calls for, else a Coder on a repo workspace, else a Scoper.
+    const g = guessRoles(text, []).filter(r => r !== 'coder' || w.repos.length);
+    const ag = mkAgent(w, g[0] || (w.repos.length ? 'coder' : 'scoper'));
+    closeModal(); setThread(ag.id); talk(w, ag, text); toast(`Added ${ag.name}`);
+  });
+}
+
+function prBody(w, repo, others){
+  const files = Object.keys(w.changes).filter(p => repoOf(p) === repo), s = wsStat(w, repo);
+  const first = w.feed.find(i => i.k === 'prompt'), routes = w.routes[repo] || [];
+  return `${first ? first.text : w.title}
+${others.length ? `\nPart of a change across repos, also in: ${others.map(r => r + '#' + (REPOS[r].pr + 1)).join(', ')}. Merge them together.\n` : ''}
+${w.posts.filter(p => p.files && p.files.some(f => repoOf(f) === repo)).map(p => `- ${p.title}`).join('\n')}
+
+<\!-- dyffle:start -->
+### dyffle
+**${files.length} files** changed · +${s.a} −${s.d}
+
+**Affected ${REPOS[repo].kind === 'Vue' ? 'pages' : 'routes'}**
+${(routes.length ? routes : ['none']).map(r => `- \`${r}\``).join('\n')}
+<\!-- dyffle:end -->`;
+}
+function openPR(){
+  const w = cur();
+  const changed = w.repos.filter(r => !w.prs[r] && Object.keys(w.changes).some(p => repoOf(p) === r));
+  const idle = w.repos.filter(r => !Object.keys(w.changes).some(p => repoOf(p) === r));
+  $('#modal').innerHTML = `<div class="scrim" id="scrim"><form class="modal" id="prform">
+    <h3>${multi(w) ? 'Open pull requests' : 'Open a pull request'}</h3>
+    <p class="hint">Pushes <code>${esc(w.branch)}</code>${multi(w) ? ' in each repo. The PRs link to each other.' : ` against <code>${w.bases[w.repos[0]]}</code>.`}</p>
+    <div class="field"><label for="pr-title">Title</label><input id="pr-title" value="${esc(w.title)}"></div>
+    ${changed.map(r => { const s = wsStat(w, r); return `<div class="prrepo">
+      <label><input type="checkbox" id="pr-r-${r}" checked> acme/${r} <small>${esc(w.branch)} → ${w.bases[r]} · +${s.a} −${s.d}</small></label>
+      <textarea id="pr-b-${r}" aria-label="Description for ${r}">${esc(prBody(w, r, changed.filter(x => x !== r)))}</textarea>
+    </div>`; }).join('')}
+    ${idle.map(r => `<div class="prrepo none">acme/${r}: no changes, no PR.</div>`).join('')}
+    <div class="acts"><button type="button" class="btn" id="mclose">Cancel</button><button class="btn primary" type="submit">${changed.length > 1 ? `Open ${changed.length} PRs` : 'Open PR'}</button></div>
+  </form></div>`;
+  $('#prform').addEventListener('submit', e => {
+    e.preventDefault();
+    const rs = changed.filter(r => $('#pr-r-' + r).checked); if (!rs.length) return;
+    rs.forEach(r => w.prs[r] = ++REPOS[r].pr);
+    w.agents.forEach(a => { if (a.status === 'review') a.status = 'idle'; });
+    w.feed.push({k:'status', text:`Pushed <code>${esc(w.branch)}</code> and opened ${andList(rs.map(r => prLabel(w, r)))}`});
+    closeModal(); renderAll(); toast(`Opened ${andList(rs.map(r => prLabel(w, r)))}`);
+  });
+}
+function closeModal(){ $('#modal').innerHTML = ''; }
+let tt;
+function toast(t){ const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 2800); }
+
+function select(id){
+  state.cur = id; state.sel = null; state.editing = null; state.docKey = null; cur().unread = false;
+  $('#side').classList.remove('open'); closePop(); renderAll(true);
+}
+function selectPath(p){
+  const w = cur();
+  if (w.rf !== 'all' && repoOf(p) !== w.rf) w.rf = 'all';
+  const map = ensureMap(w);
+  if (w.cur !== map.id) { w.cur = map.id; state.docKey = null; }
+  state.sel = p; state.editing = null;
+  setTab('art'); renderStage(false);
+}
+function setTab(t){
+  $('#body').dataset.tab = t; document.querySelectorAll('#mtabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  if (t === 'art' && curArt(cur())?.kind === 'dyffle') fit();
+}
+function setThread(id){
+  const w = cur(); w.thread = id;
+  const ag = agOf(w, id); if (ag) { ag.unread = false; w.to = id; }
+  renderThreads(); renderFeed();
+}
+// The chat can be collapsed into a floating button; remembered per browser.
+function setChat(on, quiet){
+  state.chat = on;
+  $('#body').classList.toggle('nochat', !on);
+  if (on) cur().chatNew = false;
+  try { localStorage.setItem('conduct.chat', on ? '1' : '0'); } catch (e) {}
+  placeTab();
+  if (!quiet) (on ? $('#chatcollapse') : $('#chattab')).focus({preventScroll: true});
+  if (curArt(cur())?.kind === 'dyffle') requestAnimationFrame(fit);
+}
+function openArt(id, v){
+  const w = cur(), a = artOf(w, id), switched = w.cur !== id;
+  w.cur = id; if (v !== undefined) a.view = v;
+  if (switched) state.sel = null;
+  setTab('art'); renderFeed(true); renderStage(switched);
+}
+
+// ---- Events ----
+let dragged = false;
+document.addEventListener('click', e => {
+  const t = e.target.closest('button, [data-path], [data-ws]');
+  if (!t) { if (!e.target.closest('#pop') && !$('#pop').hidden) closePop(); return; }
+  const w = cur(), art = curArt(w);
+  if (t.dataset.ws) return select(t.dataset.ws);
+  if (t.dataset.thread) return setThread(t.dataset.thread);
+  if (t.dataset.art) { const a = artOf(w, t.dataset.art), v = +t.dataset.ver; return openArt(t.dataset.art, a.kind === 'dyffle' && a.view === v && w.cur === a.id ? 'live' : v); }
+  if (t.dataset.tabart) return openArt(t.dataset.tabart);
+  if (t.dataset.gover) { art.view = +t.dataset.gover; return renderStage(false); }
+  if (t.dataset.path && t.matches('.node,.ref')) { if (dragged) return; return selectPath(t.dataset.path); }
+  if (t.dataset.tab) return setTab(t.dataset.tab);
+  if (t.dataset.rf) { w.rf = t.dataset.rf; renderPicker(); return renderMap(true); }
+  if (t.dataset.addc) { const [path, side, line] = t.dataset.addc.split('|'); state.editing = {key: t.dataset.addc, path, side, line: +line, code: t.dataset.code}; return renderSheet(); }
+  if (t.dataset.delc) { w.comments = w.comments.filter(c => c.id !== +t.dataset.delc); renderHead(); renderMap(false); if (!$('#pop').hidden) openSend($('#revbtn')); if (!state.editing) renderSheet(); return; }
+  switch (t.id) {
+    case 'newws': return openNew();
+    case 'addag': return openAgent();
+    case 'chatcollapse': return setChat(false);
+    case 'chattab': return setChat(true);
+    case 'tx': state.tx = !state.tx; t.setAttribute('aria-pressed', String(state.tx)); return renderFeed(true);
+    case 'menubtn': return $('#side').classList.toggle('open');
+    case 'stopbtn': return stop(w, agOf(w, t.dataset.ag));
+    case 'revbtn': return $('#pop').hidden ? openSend(t) : closePop();
+    case 'popclose': return closePop();
+    case 'sendall': w.overall = $('#overall').value; return sendAll();
+    case 'prbtn': return openPR();
+    case 'mclose': return closeModal();
+    case 'shclose': state.sel = null; state.editing = null; return renderStage(false);
+    case 'ccancel': state.editing = null; return renderSheet();
+    case 'csave': {
+      const body = $('#cedit').value.trim(); if (!body) return;
+      const ed = state.editing, c = w.changes[ed.path];
+      w.comments.push({id: Date.now(), key: ed.key, path: ed.path, side: ed.side, line: ed.line, code: ed.code, body, symbol: symAt(c, ed.code)});
+      state.editing = null; renderSheet(); renderHead(); renderMap(false); return;
+    }
+    case 'prev': case 'next': {
+      if (art.kind === 'dyffle') {
+        const vs = w.posts.filter(p => p.art === art.id).map(p => p.v).concat('live'), i = vs.indexOf(art.view);
+        const j = i + (t.id === 'next' ? 1 : -1); if (j >= 0 && j < vs.length) { art.view = vs[j]; renderFeed(true); renderStage(false); }
+      } else { const v = art.view + (t.id === 'next' ? 1 : -1); if (v >= 1 && v <= latest(art)) { art.view = v; renderFeed(true); renderStage(false); } }
+      return;
+    }
+    case 'zin': return zoom(1.2);
+    case 'zout': return zoom(1 / 1.2);
+    case 'zfit': return fit();
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closePop(); closeModal(); $('#side').classList.remove('open'); }
+  const tgt = e.composedPath()[0];
+  if (e.key === '\\' && !e.metaKey && !e.ctrlKey && !(tgt.closest && tgt.closest('input,textarea,select'))) { e.preventDefault(); setChat(!state.chat); }
+  if (e.key === 'Enter' && e.target.matches('.node')) selectPath(e.target.dataset.path);
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.id === 'cin') $('#cform').requestSubmit();
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.id === 'cedit') $('#csave').click();
+});
+document.addEventListener('mousedown', e => { if (e.target.id === 'scrim') closeModal(); });
+document.addEventListener('change', e => {
+  const w = cur(), art = curArt(w);
+  if (e.target.id === 'viewed') { if (e.target.checked) w.viewed[state.sel] = sig(w.changes[state.sel]); else delete w.viewed[state.sel]; renderSheet(); renderMap(false); }
+  if (e.target.id === 'hl') { state.hl = e.target.checked; renderDoc(); }
+  if (e.target.id === 'cto') { w.to = e.target.value; renderFeed(true); }
+  if (e.target.id === 'pick') { art.view = e.target.value === 'live' ? 'live' : +e.target.value; renderFeed(true); renderStage(false); }
+});
+document.addEventListener('input', e => { if (e.target.id === 'overall') cur().overall = e.target.value; });
+const docHost = $('#doc'); docHost.attachShadow({mode:'open'});
+docHost.shadowRoot.addEventListener('input', onAnswer);
+docHost.shadowRoot.addEventListener('change', onAnswer);
+$('#cform').addEventListener('submit', e => {
+  e.preventDefault();
+  const w = cur(), text = $('#cin').value.trim(), ag = threadOf(w);
+  if (!text || !ag) return;
+  if (ag.status === 'running') { toast(`${ag.name} is busy. Stop it first, or wait for its next post.`); return; }
+  $('#cin').value = '';
+  if (Object.keys(w.prs).length && ag.role === 'coder') w.feed.push({k:'status', text:`New commits go to ${andList(Object.keys(w.prs).map(r => prLabel(w, r)))}`});
+  talk(w, ag, text);
+});
+
+// Pan and zoom
+const cv = $('#canvas');
+let pan = null;
+cv.addEventListener('pointerdown', e => { if (e.button !== 0) return; pan = {x: e.clientX, y: e.clientY, vx: state.view.x, vy: state.view.y}; dragged = false; });
+addEventListener('pointermove', e => {
+  if (!pan) return;
+  const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+  if (!dragged && Math.hypot(dx, dy) < 4) return;
+  dragged = true; cv.classList.add('panning');
+  state.view.x = pan.vx + dx; state.view.y = pan.vy + dy; applyView();
+});
+addEventListener('pointerup', () => { pan = null; cv.classList.remove('panning'); setTimeout(() => dragged = false, 0); });
+cv.addEventListener('wheel', e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+addEventListener('resize', () => { placeTab(); if (curArt(cur())?.kind === 'dyffle') fit(); });
+
+// Boot: the Researcher in Catalog search is mid-run and posts its benchmark as v2.
+let chatOn = true;
+try { chatOn = localStorage.getItem('conduct.chat') !== '0'; } catch (e) {}
+setChat(chatOn, true);
+renderAll(true);
+(() => {
+  const r = byId('search'), researcher = r.agents[0], ra = r.arts[0];
+  const d = clone(ra.data);
+  d.bench = {how:'The 200 most common searches from last month’s logs, against all 120k products, on one 4 GB machine each.', rows:[
+    {id:'meili', p95:38, zero:1.8, idx:'4 min', ram:'1.1 GB'}, {id:'typesense', p95:29, zero:2.1, idx:'3 min', ram:'1.6 GB'},
+    {id:'elastic', p95:64, zero:1.5, idx:'9 min', ram:'3.2 GB'}, {id:'pg', p95:212, zero:6.4, idx:'—', ram:'existing'}]};
+  run(r, researcher, [
+    [2200, ...tool('Bash node bench/load-catalog.js --products 120000')],
+    [2600, ...tool('Bash node bench/run.js --queries logs/top-200-searches.txt')],
+    [2400, ...tool(`Write ${ra.title} v2`)],
+    [1600, 'version', {art: ra.id, d, chg: ['bench'], note: 'Benchmark on our own catalog: latency, zero results, indexing, memory.', title: 'Benchmark on our catalog',
+      msg: 'Ran the 200 most common searches against all 120k products. **Typesense** is fastest (29 ms p95), **Elasticsearch** finds the most, and Postgres misses 6.4% of searches.\n\nSet the weights to what matters to you and shortlist; I’ll re-score.'}],
+    [300, 'status', 'review'],
+  ]);
+})();
+</script>
