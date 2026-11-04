@@ -1,0 +1,25 @@
+{
+  "//": "Whole-repo view: dyffle indexes with it and `npm run typecheck` checks tests and .vue files with it. Packages build from their own tsconfig.json.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "preserve",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@drums/protocol": ["./packages/protocol/src/index.ts"],
+      "@drums/core": ["./packages/core/src/index.ts"],
+      "@drums/server": ["./packages/server/src/index.ts"],
+      "@drums/artifact-kit": ["./packages/artifact-kit/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/src/**/*.vue"]
+}

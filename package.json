@@ -1,0 +1,44 @@
+{
+  "name": "drums-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/protocol",
+    "packages/artifact-kit",
+    "packages/core",
+    "packages/server",
+    "packages/web",
+    "packages/cli"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/link-dyffle.mjs",
+    "link:dyffle": "node scripts/link-dyffle.mjs",
+    "prebuild": "npm run -s link:dyffle",
+    "build": "tsc -b tsconfig.build.json && npm run build -w @drums/web",
+    "pretypecheck": "npm run -s link:dyffle",
+    "typecheck": "tsc -b tsconfig.build.json && vue-tsc --noEmit -p packages/web/tsconfig.json && vue-tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "pretest": "npm run -s link:dyffle",
+    "test": "vitest run",
+    "predrums": "npm run -s link:dyffle",
+    "drums": "node packages/cli/dist/main.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/test-utils": "^2.5.1",
+    "eslint": "^10.14.0",
+    "eslint-plugin-vue": "^10.12.0",
+    "happy-dom": "^21.0.4",
+    "typescript": "~5.9",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-tsc": "^3.3.14"
+  }
+}

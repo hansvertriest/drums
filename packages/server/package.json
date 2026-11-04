@@ -1,0 +1,8 @@
+{
+  "name": "@drums/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "dependencies": { "@drums/core": "*", "@drums/protocol": "*", "hono": "^4.13.16", "@hono/node-server": "^2.1.6", "zod": "^4.6.7" }
+}
