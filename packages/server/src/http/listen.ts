@@ -15,6 +15,8 @@ export function listen(app: Hono, port: number, hostname: string): Promise<Liste
         close: () =>
           new Promise((done, fail) => {
             server.close((error) => (error ? fail(error) : done()));
+            // Event streams never finish on their own.
+            if ('closeAllConnections' in server) server.closeAllConnections();
           }),
       });
     });

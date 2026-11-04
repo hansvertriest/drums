@@ -1,22 +1,32 @@
-import type { AgentId, ToolId, WorkspaceId } from '@drums/protocol';
+import type { AgentId, ArtifactKindId, ToolId, WorkspaceId } from '@drums/protocol';
 import type { z } from 'zod';
+import type { ArtifactService } from '../artifacts/artifact-service.js';
+import type { ToolCallResult } from '../ports/agent-backend.js';
+import type { PostService } from '../posts/post-service.js';
 
-/** Handlers call services through this, never adapters. Services join it as they are built. */
+/** What tools may call. Services only, never adapters. */
+export interface ToolServices {
+  posts: PostService;
+  artifacts: ArtifactService;
+  agents: { requestInput(workspace: WorkspaceId, agent: AgentId, reason: string): Promise<void> };
+}
+
+/** Knows the calling agent, so attribution is automatic. */
 export interface ToolContext {
   workspace: WorkspaceId;
   agent: AgentId;
+  /** The calling role's kind for new artifacts. */
+  defaultArtifactKind?: ArtifactKindId;
+  services: ToolServices;
 }
 
-export interface ToolResult {
-  text: string;
-  isError?: boolean;
-}
+export type ToolResult = ToolCallResult;
 
 export interface ToolDefinition<I = unknown> {
   id: ToolId;
   /** Says WHEN to use it, not only what it does (spec §6.1). */
   description: string;
-  input: z.ZodType<I>;
+  input: z.ZodObject<z.ZodRawShape> & z.ZodType<I>;
   handle(input: I, ctx: ToolContext): Promise<ToolResult>;
 }
 
@@ -24,6 +34,16 @@ export interface ToolDefinition<I = unknown> {
  * Keeps a tool's input type and handler together while erasing `I` for the
  * registry list. The cast is safe if callers parse with `tool.input` first.
  */
-export function defineTool<I>(tool: ToolDefinition<I>): ToolDefinition {
+export function defineTool<S extends z.ZodRawShape>(tool: {
+  id: ToolId;
+  description: string;
+  input: z.ZodObject<S>;
+  handle(input: z.infer<z.ZodObject<S>>, ctx: ToolContext): Promise<ToolResult>;
+}): ToolDefinition {
   return tool as unknown as ToolDefinition;
 }
+
+export const jsonResult = (value: unknown, isError = false): ToolResult => ({
+  text: JSON.stringify(value),
+  ...(isError ? { isError } : {}),
+});

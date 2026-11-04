@@ -2,7 +2,7 @@ import type { HealthResponse } from '@drums/protocol';
 import { Hono } from 'hono';
 import type { RouteGroup } from '../route-group.js';
 
-/** The dummy route group: shows the registries reached the HTTP layer. */
+/** Shows the registries reached the HTTP layer. */
 export const healthRoutes: RouteGroup = {
   path: '/api/health',
   create({ clock, roles, tools, artifactKinds }) {

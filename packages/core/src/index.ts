@@ -2,7 +2,8 @@ export type * from './ports/index.js';
 export { createRegistry, type Registry } from './registry/registry.js';
 export type { RoleDefinition } from './roles/role-definition.js';
 export { createRoleRegistry, roles, type RoleRegistry } from './roles/registry.js';
-export { defineTool, type ToolContext, type ToolDefinition, type ToolResult } from './tools/tool-definition.js';
+export { defineTool, type ToolContext, type ToolDefinition, type ToolResult, type ToolServices } from './tools/tool-definition.js';
+export { bindTool } from './tools/bind.js';
 export { createToolRegistry, tools, type ToolRegistry } from './tools/registry.js';
 export type { ArtifactKindDefinition } from './artifacts/artifact-kind.js';
 export { artifactKinds, createArtifactKindRegistry, type ArtifactKindRegistry } from './artifacts/registry.js';
@@ -13,3 +14,12 @@ export {
   type EventBus,
   type Unsubscribe,
 } from './events/event-bus.js';
+export { ConflictError, InvalidError, NotFoundError } from './errors.js';
+export type { PostService } from './posts/post-service.js';
+export type { ArtifactService, UpdateResult, VersionContent } from './artifacts/artifact-service.js';
+export type { AgentService } from './agents/agent-service.js';
+export type { FeedbackService } from './feedback/feedback-service.js';
+export { formatFeedback, type FeedbackGroup } from './feedback/format.js';
+export type { WorkspaceService } from './workspaces/workspace-service.js';
+export { workspaceStatus } from './workspaces/status.js';
+export { createServices, type ServiceDeps, type Services } from './services.js';

@@ -1,0 +1,68 @@
+import { z } from 'zod';
+import { Answer } from './artifact.js';
+import { AgentId, ArtifactId, VersionNumber } from './ids.js';
+
+const Base = z.object({
+  /** Position in the workspace's feed: `posts/0007.json`. */
+  seq: z.number().int().positive(),
+  /** Whose thread it is in. For a note or a version, also its author. */
+  agent: AgentId,
+  at: z.iso.datetime(),
+});
+
+export const NotePost = Base.extend({
+  kind: z.literal('note'),
+  title: z.string(),
+  message: z.string(),
+});
+
+export const VersionPost = Base.extend({
+  kind: z.literal('version'),
+  title: z.string(),
+  message: z.string(),
+  artifact: ArtifactId,
+  version: VersionNumber,
+});
+
+/** What the user typed in the composer. */
+export const MessagePost = Base.extend({
+  kind: z.literal('message'),
+  text: z.string(),
+});
+
+/** What Send delivered, as the thread shows it. */
+export const FeedbackPost = Base.extend({
+  kind: z.literal('feedback'),
+  items: z.array(
+    z.object({
+      artifact: ArtifactId,
+      title: z.string(),
+      version: VersionNumber,
+      answers: z.array(Answer),
+    }),
+  ),
+  overall: z.string().optional(),
+});
+
+/** A thread entry. `checkpoint` joins with M3. */
+export const Post = z.discriminatedUnion('kind', [NotePost, VersionPost, MessagePost, FeedbackPost]);
+export type Post = z.infer<typeof Post>;
+
+/** A post before the store gives it its place in the feed. */
+export type PostDraft = Post extends infer P ? (P extends Post ? Omit<P, 'seq'> : never) : never;
+
+const StepBase = z.object({
+  seq: z.number().int().positive(),
+  agent: AgentId,
+  at: z.iso.datetime(),
+});
+
+/** What an agent did between posts. */
+export const Step = z.discriminatedUnion('kind', [
+  StepBase.extend({ kind: z.literal('tool'), tool: z.string(), summary: z.string() }),
+  StepBase.extend({ kind: z.literal('text'), text: z.string() }),
+  StepBase.extend({ kind: z.literal('error'), text: z.string() }),
+]);
+export type Step = z.infer<typeof Step>;
+
+export type StepDraft = Step extends infer S ? (S extends Step ? Omit<S, 'seq'> : never) : never;

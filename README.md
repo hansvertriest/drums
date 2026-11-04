@@ -15,6 +15,16 @@ npm run drums            # starts on 127.0.0.1:4180 and opens the browser
 npm run drums -- --port 5000 --no-open
 ```
 
+State lives in files, per spec §8. These environment variables move it; use them for trial runs, so your real `~/.drums` stays out of it:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DRUMS_HOME` | `~/.drums` | where `config.json` lives |
+| `DRUMS_WORKSPACES_ROOT` | `workspacesRoot` in `config.json`, else `<home>/workspaces` | where workspaces live |
+| `DRUMS_AGENT_MODEL` | `models.agent` in `config.json`, else the default in `packages/server/src/config.ts` | the agents' model |
+
+Agents use the machine's existing Claude Code login. The server binds to `127.0.0.1`; there is no auth.
+
 `npm test`, `npm run typecheck` and `npm run lint` check the workspace. `npm run lint` also enforces the dependency rules of spec §3; the table is in `tools/eslint/boundaries.js`.
 
 The `drums` command itself lands in `node_modules/.bin` only if `packages/cli/dist` exists during an install, so on a fresh clone run `npm install` once more after the first build to use `npx drums`.

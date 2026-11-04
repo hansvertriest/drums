@@ -1,24 +1,40 @@
-import type { RoleId, ToolId } from '@drums/protocol';
+import type { ToolId } from '@drums/protocol';
+import type { z } from 'zod';
 
-/** What a session reports while it runs. Grows with M1. */
+/** What a session reports while it runs. */
 export type AgentEvent =
-  | { type: 'turn.started' }
-  | { type: 'turn.ended' }
-  | { type: 'step'; tool: string; summary: string };
+  /** The backend's id for this session, stored so the agent can resume. */
+  | { type: 'session'; sessionId: string }
+  | { type: 'step'; tool: string; summary: string }
+  | { type: 'text'; text: string }
+  | { type: 'turn.ended'; outcome: 'success' | 'error'; error?: string };
+
+export interface ToolCallResult {
+  text: string;
+  isError?: boolean;
+}
+
+/** A registered tool tied to one agent, so attribution is automatic. Validates its own input. */
+export interface BoundTool {
+  id: ToolId;
+  description: string;
+  input: z.ZodObject<z.ZodRawShape>;
+  call(args: unknown): Promise<ToolCallResult>;
+}
 
 export interface AgentSessionOptions {
   cwd: string;
-  role: RoleId;
+  /** The role prompt, which carries the artifact contract. */
   prompt: string;
-  tools: ToolId[];
+  /** The session gets exactly these tools. Everything else is denied. */
+  tools: BoundTool[];
 }
 
 export interface AgentSession {
-  /** Stored so the agent can resume after a restart. */
-  readonly id: string;
   readonly events: AsyncIterable<AgentEvent>;
   send(message: string): Promise<void>;
   interrupt(): Promise<void>;
+  close(): void;
 }
 
 export interface AgentBackend {

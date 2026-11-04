@@ -2,12 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { createArtifactKindRegistry, createRoleRegistry, createToolRegistry } from './index.js';
 
 describe('built-in registries', () => {
-  it('each hold the dummy entry', () => {
-    expect(createRoleRegistry().has('dummy')).toBe(true);
-    expect(createToolRegistry().has('dummy')).toBe(true);
-    expect(createArtifactKindRegistry().has('dummy')).toBe(true);
-  });
-
   it('only give roles tools and kinds that exist', () => {
     const tools = createToolRegistry();
     const kinds = createArtifactKindRegistry();
@@ -17,10 +11,28 @@ describe('built-in registries', () => {
     }
   });
 
-  it('run a tool through its schema', async () => {
-    const tool = createToolRegistry().get('dummy');
-    const input = tool.input.parse({ text: 'hi' });
-    await expect(tool.handle(input, { workspace: 'w1', agent: 'a1' })).resolves.toEqual({ text: 'hi' });
-    expect(tool.input.safeParse({}).success).toBe(false);
+  it('carry the artifact contract in every role prompt', () => {
+    for (const role of createRoleRegistry().list()) {
+      expect(role.prompt).toContain('# The artifact contract');
+      expect(role.prompt).toContain('class="chg"');
+      expect(role.prompt).toContain('base_version');
+    }
+  });
+
+  it('say when to use each tool', () => {
+    for (const tool of createToolRegistry().list()) {
+      expect(tool.description, tool.id).toMatch(/\b(Call it|Call)\b/);
+    }
+  });
+
+  it('hold the M1 tools for the Scoper', () => {
+    expect(createRoleRegistry().get('scoper').tools).toEqual([
+      'post',
+      'artifact_list',
+      'artifact_read',
+      'artifact_create',
+      'artifact_update',
+      'request_input',
+    ]);
   });
 });

@@ -33,6 +33,8 @@ export default tseslint.config(
   {
     files: ['**/*.vue'],
     languageOptions: { parserOptions: { parser: tseslint.parser } },
+    // The names spec §3.6 gives these components.
+    rules: { 'vue/multi-word-component-names': ['error', { ignores: ['Composer', 'Thread'] }] },
   },
   {
     files: ['packages/*/src/**/*.ts', 'packages/*/src/**/*.vue'],

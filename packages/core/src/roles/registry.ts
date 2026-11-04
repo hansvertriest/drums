@@ -1,9 +1,9 @@
 import { createRegistry, type Registry } from '../registry/registry.js';
-import { dummyRole } from './dummy.js';
 import type { RoleDefinition } from './role-definition.js';
+import { scoperRole } from './scoper.js';
 
 /** Add a role: one new file in this folder, one line here. */
-export const roles: readonly RoleDefinition[] = [dummyRole];
+export const roles: readonly RoleDefinition[] = [scoperRole];
 
 export type RoleRegistry = Registry<RoleDefinition>;
 

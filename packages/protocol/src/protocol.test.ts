@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DomainEvent, HealthResponse } from './index.js';
+import { DomainEvent, HealthResponse, Post, WorkspaceId, parseFrameMessage } from './index.js';
 
 describe('protocol schemas', () => {
   it('accepts a known domain event and rejects an unknown type', () => {
@@ -11,5 +11,37 @@ describe('protocol schemas', () => {
   it('rejects a health response without a valid time', () => {
     const body = { status: 'ok', time: 'soon', roles: [], tools: [], artifactKinds: [] };
     expect(HealthResponse.safeParse(body).success).toBe(false);
+  });
+
+  it('keeps ids that reach file paths out of parent folders', () => {
+    for (const id of ['../etc', 'a/b', '.hidden', '', 'a b']) expect(WorkspaceId.safeParse(id).success).toBe(false);
+    expect(WorkspaceId.safeParse('checkout-v2-1f3a').success).toBe(true);
+  });
+
+  it('tells post kinds apart', () => {
+    const at = new Date().toISOString();
+    const note = { kind: 'note', seq: 1, agent: 'a1', at, title: 't', message: 'm' };
+    expect(Post.parse(note)).toEqual(note);
+    expect(Post.safeParse({ ...note, kind: 'version' }).success).toBe(false);
+  });
+});
+
+describe('parseFrameMessage', () => {
+  it('takes well-formed messages', () => {
+    expect(parseFrameMessage({ source: 'drums-artifact', type: 'ready' })?.type).toBe('ready');
+    const answers = [{ name: 'q', label: 'Q', value: 'x' }];
+    expect(parseFrameMessage({ source: 'drums-artifact', type: 'answers', answers })).toMatchObject({ answers });
+  });
+
+  it('drops everything else, an untrusted frame sent it', () => {
+    const bad: unknown[] = [
+      null,
+      'ready',
+      { type: 'ready' },
+      { source: 'drums-artifact', type: 'navigate', url: 'https://x' },
+      { source: 'drums-artifact', type: 'answers', answers: [{ name: 'q' }] },
+      { source: 'drums-artifact', type: 'answers', answers: [{ name: 'q', label: 'Q', value: 'x'.repeat(20_001) }] },
+    ];
+    for (const data of bad) expect(parseFrameMessage(data)).toBeUndefined();
   });
 });

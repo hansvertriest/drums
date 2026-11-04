@@ -1,9 +1,9 @@
 import { createRegistry, type Registry } from '../registry/registry.js';
 import type { ArtifactKindDefinition } from './artifact-kind.js';
-import { dummyArtifactKind } from './dummy.js';
+import { htmlArtifactKind } from './html.js';
 
 /** Add a kind: one new file in this folder, one line here, and a renderer in `web`. */
-export const artifactKinds: readonly ArtifactKindDefinition[] = [dummyArtifactKind];
+export const artifactKinds: readonly ArtifactKindDefinition[] = [htmlArtifactKind];
 
 export type ArtifactKindRegistry = Registry<ArtifactKindDefinition>;
 

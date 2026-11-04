@@ -1,12 +1,4 @@
-import type {
-  ArtifactKindRegistry,
-  Clock,
-  CodeReview,
-  EventBus,
-  Ids,
-  RoleRegistry,
-  ToolRegistry,
-} from '@drums/core';
+import type { ArtifactKindRegistry, Clock, CodeReview, EventBus, Ids, RoleRegistry, Services, ToolRegistry } from '@drums/core';
 import type { Hono } from 'hono';
 
 /** Everything a route group may use. Built once, in `main.ts`. */
@@ -18,6 +10,7 @@ export interface HttpDeps {
   roles: RoleRegistry;
   tools: ToolRegistry;
   artifactKinds: ArtifactKindRegistry;
+  services: Services;
 }
 
 export interface RouteGroup {
