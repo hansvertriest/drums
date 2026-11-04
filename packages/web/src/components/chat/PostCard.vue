@@ -14,6 +14,9 @@ const artifacts = useArtifacts();
 <template>
   <div v-if="post.kind === 'message'" class="user">
     <span class="who">You · {{ shortTime(post.at) }}</span>
+    <button v-if="post.focus" type="button" class="about" @click="artifacts.open(post.focus.artifact, post.focus.version)">
+      About: {{ artifacts.titleOf(post.focus.artifact) }} · v{{ post.focus.version }}
+    </button>
     <div class="md" v-html="renderMarkdown(post.text)" />
   </div>
 
@@ -72,6 +75,16 @@ const artifacts = useArtifacts();
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+}
+.about {
+  display: block;
+  margin-bottom: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--accent);
+  text-align: left;
 }
 .post {
   padding: 11px 13px 12px;

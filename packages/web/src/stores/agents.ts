@@ -11,11 +11,15 @@ export const useAgents = defineStore('agents', () => {
     agents.value = next;
     if (!next.some((agent) => agent.id === currentId.value)) currentId.value = next[0]?.id;
   };
+  /** From the request or from the stream, whichever comes first. */
+  const add = (agent: Agent) => {
+    if (!agents.value.some((a) => a.id === agent.id)) agents.value.push(agent);
+  };
   const setStatus = (id: AgentId, status: AgentStatus) => {
     const agent = agents.value.find((a) => a.id === id);
     if (agent) agent.status = status;
   };
   const nameOf = (id: AgentId) => agents.value.find((agent) => agent.id === id)?.name ?? '';
 
-  return { agents, currentId, current, load, setStatus, nameOf };
+  return { agents, currentId, current, load, add, setStatus, nameOf };
 });

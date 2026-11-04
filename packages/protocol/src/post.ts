@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Answer } from './artifact.js';
+import { Focus } from './focus.js';
 import { AgentId, ArtifactId, VersionNumber } from './ids.js';
 
 const Base = z.object({
@@ -28,6 +29,8 @@ export const VersionPost = Base.extend({
 export const MessagePost = Base.extend({
   kind: z.literal('message'),
   text: z.string(),
+  /** What the user was looking at, so the thread can still say what "this" meant. */
+  focus: Focus.optional(),
 });
 
 /** What Send delivered, as the thread shows it. */

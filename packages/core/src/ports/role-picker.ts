@@ -11,7 +11,10 @@ export interface RolePick {
 }
 
 export interface RolePickRequest {
+  /** The workspace's goal; for Add agent, what the new agent should do. */
   goal: string;
+  /** Add agent: where the workspace stands. */
+  overview?: string;
   candidates: RoleCandidate[];
   hasRepos: boolean;
   /** Add agent: pick exactly one. */

@@ -46,18 +46,24 @@ export const useArtifacts = defineStore('artifacts', () => {
     contents.value = {};
   };
 
-  /** A new version shows up right away, unless the user is reading an older one of that artifact. */
-  const addVersion = (artifact: Artifact) => {
+  /**
+   * A new version replaces the one on screen, unless the user is reading an older one of that
+   * artifact. With `bringForward` it also takes the stage from another artifact; agents the
+   * user isn't watching shouldn't pull the page out from under them.
+   */
+  const addVersion = (artifact: Artifact, bringForward = true) => {
     const index = artifacts.value.findIndex((a) => a.id === artifact.id);
     if (index < 0) artifacts.value.push(artifact);
     else artifacts.value[index] = artifact;
     currentId.value ??= artifact.id;
-    if (pinned.value[artifact.id] === undefined) currentId.value = artifact.id;
+    if (bringForward && pinned.value[artifact.id] === undefined) currentId.value = artifact.id;
   };
+
+  const titleOf = (id: ArtifactId) => artifacts.value.find((artifact) => artifact.id === id)?.title ?? id;
 
   const setContent = (id: ArtifactId, response: VersionResponse) => {
     contents.value[versionKey(id, response.version.version)] = response;
   };
 
-  return { artifacts, currentId, current, latest, viewing, isLatest, content, open, load, reset, addVersion, setContent };
+  return { artifacts, currentId, current, latest, viewing, isLatest, content, open, load, reset, addVersion, titleOf, setContent };
 });

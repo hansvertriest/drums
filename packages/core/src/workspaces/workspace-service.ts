@@ -6,6 +6,7 @@ import type { FeedbackService } from '../feedback/feedback-service.js';
 import type { Clock } from '../ports/clock.js';
 import type { Ids } from '../ports/ids.js';
 import type { Store } from '../ports/store.js';
+import { isAuthored } from '../posts/feed.js';
 import type { PostService } from '../posts/post-service.js';
 import { workspaceSlug } from './slug.js';
 import { workspaceStatus } from './status.js';
@@ -55,7 +56,7 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
       const workspaces = await store.listWorkspaces();
       return Promise.all(
         workspaces.map(async ({ id, goal, agents: members }) => {
-          const author = (await posts.list(id)).filter((post) => post.kind === 'note' || post.kind === 'version').at(-1)?.agent;
+          const author = (await posts.list(id)).filter(isAuthored).at(-1)?.agent;
           const lastRole = members.find((agent) => agent.id === author)?.role;
           return { id, goal, status: workspaceStatus(members), ...(lastRole ? { lastRole } : {}) };
         }),

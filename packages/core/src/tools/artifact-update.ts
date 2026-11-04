@@ -15,7 +15,14 @@ Send the complete HTML, mark sections that changed with class="chg", and pass th
   async handle({ id, base_version, html, note }, { workspace, agent, services }) {
     const result = await services.artifacts.update(workspace, agent, { id, baseVersion: base_version, content: html, note });
     if (result.status === 'ok') return jsonResult({ version: result.version });
-    const { content, ...latest } = result.latest;
-    return jsonResult({ conflict: `Version ${latest.version} is newer than your base.`, latest: { ...latest, html: content } }, true);
+    const { content, by, ...latest } = result.latest;
+    const nameOf = await services.agents.namer(workspace);
+    return jsonResult(
+      {
+        conflict: `Version ${latest.version} by ${nameOf(by)} is the latest, and your base was ${base_version}. Merge your change into its HTML, keeping theirs, and call artifact_update again with base_version ${latest.version}.`,
+        latest: { ...latest, by: nameOf(by), html: content },
+      },
+      true,
+    );
   },
 });

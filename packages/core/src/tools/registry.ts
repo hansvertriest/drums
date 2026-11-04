@@ -3,6 +3,7 @@ import { artifactCreateTool } from './artifact-create.js';
 import { artifactListTool } from './artifact-list.js';
 import { artifactReadTool } from './artifact-read.js';
 import { artifactUpdateTool } from './artifact-update.js';
+import { feedTool } from './feed.js';
 import { postTool } from './post.js';
 import { requestInputTool } from './request-input.js';
 import type { ToolDefinition } from './tool-definition.js';
@@ -15,6 +16,7 @@ export const tools: readonly ToolDefinition[] = [
   artifactCreateTool,
   artifactUpdateTool,
   requestInputTool,
+  feedTool,
 ];
 
 export type ToolRegistry = Registry<ToolDefinition>;

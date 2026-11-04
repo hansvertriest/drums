@@ -1,10 +1,12 @@
 import {
+  Agent,
   AnswerSet,
   ApiError as ApiErrorBody,
   VersionResponse,
   WorkspaceList,
   WorkspaceState,
   type Answer,
+  type Focus,
   type VersionNumber,
 } from '@drums/protocol';
 
@@ -39,14 +41,15 @@ export const api = {
   listWorkspaces: () => request('/api/workspaces', WorkspaceList),
   createWorkspace: (goal: string) => request('/api/workspaces', WorkspaceState, withBody('POST', { goal })),
   workspace: (ws: string) => request(workspacePath(ws), WorkspaceState),
-  sendMessage: (ws: string, agent: string, text: string) =>
-    request(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/messages`, undefined, withBody('POST', { text })),
+  addAgent: (ws: string, instruction: string) => request(`${workspacePath(ws)}/agents`, Agent, withBody('POST', { instruction })),
+  sendMessage: (ws: string, agent: string, text: string, focus?: Focus) =>
+    request(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/messages`, undefined, withBody('POST', { text, focus })),
   stop: (ws: string, agent: string) =>
     request(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/stop`, undefined, { method: 'POST' }),
   version: (ws: string, artifact: string, version: VersionNumber) =>
     request(`${workspacePath(ws)}/artifacts/${encodeURIComponent(artifact)}/versions/${version}`, VersionResponse),
   saveAnswers: (ws: string, artifact: string, version: VersionNumber, answers: Answer[]) =>
     request(`${workspacePath(ws)}/artifacts/${encodeURIComponent(artifact)}/answers`, AnswerSet, withBody('PUT', { version, answers })),
-  send: (ws: string, overall?: string) =>
-    request<void>(`${workspacePath(ws)}/send`, undefined, withBody('POST', overall ? { overall } : {})),
+  send: (ws: string, body: { overall?: string | undefined; to?: string | undefined }) =>
+    request<void>(`${workspacePath(ws)}/send`, undefined, withBody('POST', body)),
 };

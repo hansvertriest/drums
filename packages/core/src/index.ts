@@ -1,4 +1,5 @@
 export type * from './ports/index.js';
+export { createTurns } from './concurrency/turns.js';
 export { createRegistry, type Registry } from './registry/registry.js';
 export type { RoleDefinition } from './roles/role-definition.js';
 export { createRoleRegistry, roles, type RoleRegistry } from './roles/registry.js';
@@ -16,6 +17,7 @@ export {
 } from './events/event-bus.js';
 export { ConflictError, InvalidError, NotFoundError } from './errors.js';
 export type { PostService } from './posts/post-service.js';
+export type { Feed, FeedEntry } from './posts/feed.js';
 export type { ArtifactService, UpdateResult, VersionContent } from './artifacts/artifact-service.js';
 export type { AgentService } from './agents/agent-service.js';
 export type { FeedbackService } from './feedback/feedback-service.js';

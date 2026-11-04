@@ -20,6 +20,7 @@ const ui = useUi();
       >
         <i :class="`st-${agent.status}`" />{{ agent.name }}
       </button>
+      <button type="button" class="add" aria-label="Add agent" title="Add agent" @click="ui.addAgentOpen = true">+</button>
     </div>
     <button type="button" class="steps" :aria-pressed="ui.showSteps" @click="ui.showSteps = !ui.showSteps">Steps</button>
   </div>
@@ -55,6 +56,10 @@ const ui = useUi();
   font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
+}
+.tabs .add {
+  padding: 0 9px;
+  font-size: 17px;
 }
 .tabs button.on {
   background: var(--surface-2);

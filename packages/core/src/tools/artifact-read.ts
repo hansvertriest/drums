@@ -10,7 +10,7 @@ Call it before updating an artifact whose latest version you don't have in front
     version: z.number().int().positive().optional(),
   }),
   async handle({ id, version }, { workspace, services }) {
-    const read = await services.artifacts.read(workspace, id, version);
-    return jsonResult({ html: read.content, version: read.version, by: read.by, note: read.note });
+    const [read, nameOf] = await Promise.all([services.artifacts.read(workspace, id, version), services.agents.namer(workspace)]);
+    return jsonResult({ html: read.content, version: read.version, by: nameOf(read.by), note: read.note });
   },
 });

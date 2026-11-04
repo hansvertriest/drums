@@ -8,7 +8,11 @@ import type { PostService } from '../posts/post-service.js';
 export interface ToolServices {
   posts: PostService;
   artifacts: ArtifactService;
-  agents: { requestInput(workspace: WorkspaceId, agent: AgentId, reason: string): Promise<void> };
+  agents: {
+    requestInput(workspace: WorkspaceId, agent: AgentId, reason: string): Promise<void>;
+    /** Agent ids mean nothing to another agent: this is how a tool names them. */
+    namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
+  };
 }
 
 /** Knows the calling agent, so attribution is automatic. */

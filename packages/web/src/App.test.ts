@@ -188,3 +188,155 @@ describe('the stage and Send', () => {
     expect(useUi().sendOpen).toBe(false);
   });
 });
+
+const newAgent = { id: 'ag2', role: 'reviewer', name: 'Reviewer', status: 'running' };
+
+describe('agent tabs', () => {
+  const two = () => {
+    const store = withWorkspace();
+    useAgents().load([
+      { id: 'ag', role: 'scoper', name: 'Scoper', status: 'review' },
+      { id: 'ag2', role: 'reviewer', name: 'Reviewer', status: 'running' },
+    ]);
+    return store;
+  };
+
+  it('shows one tab per agent with its status, and each its own thread', async () => {
+    const store = two();
+    useThreads().load(
+      [
+        { kind: 'message', seq: 1, agent: 'ag', at, text: 'for the scoper' },
+        { kind: 'message', seq: 2, agent: 'ag2', at, text: 'for the reviewer' },
+      ],
+      [],
+    );
+    const app = shell(store);
+    const chat = app.get('section[aria-label="Chat"]');
+    const tabs = chat.findAll('[role="tab"]');
+    expect(tabs.map((t) => t.text())).toEqual(['Scoper', 'Reviewer']);
+    expect(tabs[1]?.get('i').classes()).toContain('st-running');
+    expect(chat.text()).toContain('for the scoper');
+    expect(chat.text()).not.toContain('for the reviewer');
+    await tabs[1]?.trigger('click');
+    expect(chat.text()).toContain('for the reviewer');
+    expect(chat.text()).not.toContain('for the scoper');
+  });
+
+  it('sends to the agent whose tab is open', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+    const store = two();
+    const app = shell(store);
+    await app.get('textarea[aria-label="Message"]').setValue('hello');
+    await app.get('form.composer').trigger('submit');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/agents/ag/messages', expect.anything());
+  });
+
+  it('shows Stop only for an agent that runs', async () => {
+    const store = two();
+    const app = shell(store);
+    expect(app.find('.working').exists()).toBe(false);
+    await app.findAll('[role="tab"]')[1]?.trigger('click');
+    expect(app.find('.working').exists()).toBe(true);
+  });
+});
+
+describe('Add agent', () => {
+  it('asks only what it should do, and opens the new tab', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(newAgent), { status: 201 }));
+    const app = shell(withWorkspace());
+    await app.get('button[aria-label="Add agent"]').trigger('click');
+    const dialog = app.get('form[aria-label="Add agent"]');
+    expect(dialog.text()).toContain('What should it do?');
+    expect(dialog.text()).not.toMatch(/role|scoper|reviewer/i);
+    expect(dialog.findAll('select')).toHaveLength(0);
+    await dialog.get('textarea').setValue('Review it');
+    await dialog.trigger('submit');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/agents', expect.objectContaining({ method: 'POST', body: '{"instruction":"Review it"}' }));
+    expect(app.find('form[aria-label="Add agent"]').exists()).toBe(false);
+    expect(useAgents().current?.id).toBe('ag2');
+    expect(app.findAll('[role="tab"]').map((t) => t.text())).toContain('Reviewer');
+  });
+
+  it('keeps the dialog and shows a refusal', async () => {
+    const app = shell(withWorkspace());
+    await app.get('button[aria-label="Add agent"]').trigger('click');
+    await app.get('form[aria-label="Add agent"] textarea').setValue('Review it');
+    await app.get('form[aria-label="Add agent"]').trigger('submit');
+    await flushPromises();
+    expect(useUi().error).toBe('refused here');
+    expect(app.find('form[aria-label="Add agent"]').exists()).toBe(true);
+  });
+});
+
+describe('the focus chip', () => {
+  const onStage = () => {
+    const store = withWorkspace();
+    useArtifacts().load([artifact([1, 2])]);
+    useArtifacts().open('a1');
+    return store;
+  };
+  const sent = () => {
+    const call = fetchMock.mock.calls.find(([path]) => String(path).endsWith('/messages'));
+    return JSON.parse(call![1].body as string) as unknown;
+  };
+
+  it('shows what is on the stage, and goes along with the message', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 202 }));
+    const app = shell(onStage());
+    expect(app.get('.chip').text()).toContain('About: Scope · v2');
+    await app.get('textarea[aria-label="Message"]').setValue('review this');
+    await app.get('form.composer').trigger('submit');
+    await flushPromises();
+    expect(sent()).toEqual({ text: 'review this', focus: { artifact: 'a1', version: 2 } });
+  });
+
+  it('follows the version the user opens', async () => {
+    const app = shell(onStage());
+    useArtifacts().open('a1', 1);
+    await flushPromises();
+    expect(app.get('.chip').text()).toContain('About: Scope · v1');
+  });
+
+  it('can be removed, and then the message goes without it', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 202 }));
+    const app = shell(onStage());
+    await app.get('.chip button').trigger('click');
+    expect(app.find('.chip').exists()).toBe(false);
+    await app.get('textarea[aria-label="Message"]').setValue('in general');
+    await app.get('form.composer').trigger('submit');
+    await flushPromises();
+    expect(sent()).toEqual({ text: 'in general' });
+  });
+
+  it('comes back when the user looks at something else', async () => {
+    const app = shell(onStage());
+    await app.get('.chip button').trigger('click');
+    useArtifacts().open('a1', 1);
+    await flushPromises();
+    expect(app.get('.chip').text()).toContain('v1');
+  });
+
+  it('is absent with nothing on the stage', () => {
+    expect(shell(withWorkspace()).find('.chip').exists()).toBe(false);
+  });
+
+  it('shows on the message in the thread what it was about', () => {
+    const store = onStage();
+    useThreads().load([{ kind: 'message', seq: 1, agent: 'ag', at, text: 'this', focus: { artifact: 'a1', version: 1 } }], []);
+    expect(shell(store).get('.about').text()).toBe('About: Scope · v1');
+  });
+});
+
+describe('Send with no answers', () => {
+  it('sends the note to the tab that is open', async () => {
+    fetchMock.mockImplementation(async () => new Response('{"recipients":["ag"]}', { status: 200 }));
+    const app = shell(withWorkspace());
+    await app.get('header .send').trigger('click');
+    await app.get('[role="dialog"] textarea').setValue('Hi');
+    await app.get('[role="dialog"] button.primary').trigger('click');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/send', expect.objectContaining({ body: '{"overall":"Hi","to":"ag"}' }));
+  });
+});

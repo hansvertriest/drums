@@ -4,6 +4,7 @@ import { createDyffleCodeReview } from './adapters/dyffle/code-review.js';
 import { createFsStore } from './adapters/fs-store/store.js';
 import { createSystemClock } from './adapters/system/clock.js';
 import { createUuidIds } from './adapters/system/ids.js';
+import { createKeywordRolePicker } from './adapters/system/keyword-role-picker.js';
 import { loadConfig, type ConfigOverrides } from './config.js';
 import { createApp } from './http/app.js';
 import { listen } from './http/listen.js';
@@ -24,7 +25,7 @@ export interface RunningDrums {
 
 const DEFAULT_HOST = '127.0.0.1';
 
-/** Every workspace starts with this role until the role picker arrives (M4). */
+/** Every workspace starts with this role until the role picker picks for new ones too (M4). Add agent falls back on it. */
 const FIRST_ROLE = 'scoper';
 
 /** The composition root: the one place that builds adapters, registries and services. */
@@ -46,6 +47,7 @@ export async function main(options: DrumsOptions): Promise<RunningDrums> {
     roles,
     tools,
     artifactKinds,
+    rolePicker: createKeywordRolePicker(),
     firstRole: FIRST_ROLE,
   });
   await services.agents.recover();

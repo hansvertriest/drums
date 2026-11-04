@@ -9,6 +9,9 @@ import { useArtifacts } from './artifacts';
 import { useThreads } from './threads';
 import { useUi } from './ui';
 
+/** A busy workspace changes many times a second; the strip needs no more than this. */
+const LIST_REFRESH_MS = 250;
+
 export const useWorkspaces = defineStore('workspaces', () => {
   const workspaces = ref<WorkspaceSummary[]>([]);
   const currentId = ref<WorkspaceId>();
@@ -32,23 +35,43 @@ export const useWorkspaces = defineStore('workspaces', () => {
     workspaces.value = await api.listWorkspaces();
   };
 
+  let listTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleListRefresh = () => {
+    listTimer ??= setTimeout(() => {
+      listTimer = undefined;
+      void refreshList().catch(ui.report);
+    }, LIST_REFRESH_MS);
+  };
+
+  /** Events that arrive while a reload is on its way: the state it returns may be older than they are. */
+  const inFlight = new Set<DomainEvent[]>();
+
   const reload = async (id: WorkspaceId) => {
-    const state = await api.workspace(id);
-    if (id === currentId.value) loadState(state);
+    const missed: DomainEvent[] = [];
+    inFlight.add(missed);
+    try {
+      const state = await api.workspace(id);
+      if (id === currentId.value) {
+        loadState(state);
+        missed.forEach(dispatch);
+      }
+    } finally {
+      inFlight.delete(missed);
+    }
   };
 
   /** One line per event type: a new event adds one here. */
   const handlers: { [T in DomainEvent['type']]: (event: Extract<DomainEvent, { type: T }>) => void } = {
-    'agent.status': (event) => {
-      agents.setStatus(event.agent, event.status);
-      void refreshList().catch(ui.report);
-    },
+    'agent.added': (event) => agents.add(event.agent),
+    'agent.status': (event) => agents.setStatus(event.agent, event.status),
     'agent.step': (event) => threads.addStep(event.step),
     'post.created': (event) => threads.addPost(event.post),
-    'artifact.version': (event) => artifacts.addVersion(event.artifact),
+    'artifact.version': (event) => artifacts.addVersion(event.artifact, event.artifact.versions.at(-1)?.by === agents.current?.id),
     'answers.changed': (event) => answers.set(event.set),
   };
-  const dispatch = (event: DomainEvent) => (handlers[event.type] as (e: DomainEvent) => void)(event);
+  function dispatch(event: DomainEvent) {
+    (handlers[event.type] as (e: DomainEvent) => void)(event);
+  }
 
   const open = async (id: WorkspaceId) => {
     unsubscribe?.();
@@ -56,10 +79,22 @@ export const useWorkspaces = defineStore('workspaces', () => {
     artifacts.reset();
     window.location.hash = `#/w/${id}`;
     unsubscribe = subscribe(id, {
-      onEvent: dispatch,
+      onEvent(event) {
+        for (const missed of inFlight) missed.push(event);
+        dispatch(event);
+      },
       onConnect: () => void reload(id).catch(ui.report),
+      onWorkspacesChanged: scheduleListRefresh,
     });
     await reload(id);
+  };
+
+  /** Drums picks the role. Opens the new agent's tab. */
+  const addAgent = async (instruction: string) => {
+    if (!currentId.value) return;
+    const agent = await api.addAgent(currentId.value, instruction);
+    agents.add(agent);
+    agents.currentId = agent.id;
   };
 
   const create = async (goal: string) => {
@@ -76,5 +111,5 @@ export const useWorkspaces = defineStore('workspaces', () => {
     if (first) await open(first.id);
   };
 
-  return { workspaces, currentId, current, refreshList, open, create, boot };
+  return { workspaces, currentId, current, refreshList, open, create, addAgent, boot };
 });

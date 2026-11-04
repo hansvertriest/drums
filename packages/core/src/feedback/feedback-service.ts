@@ -14,8 +14,12 @@ export interface FeedbackService {
   latestAnswers(workspace: WorkspaceId): Promise<AnswerSet[]>;
   /** What was answered on one version, for showing it again. */
   answersFor(workspace: WorkspaceId, artifact: ArtifactId, version: VersionNumber): Promise<Answer[]>;
-  /** Routes pending answers to the agents that posted the latest versions. Delivers nothing if any recipient runs. */
-  send(workspace: WorkspaceId, overall?: string): Promise<{ recipients: AgentId[] }>;
+  /**
+   * Routes pending answers to the agents that posted the latest versions, with the overall
+   * note going to the first of them. With no answers the note goes to `to`, or else the first
+   * agent. Delivers nothing if any recipient runs.
+   */
+  send(workspace: WorkspaceId, input?: { overall?: string | undefined; to?: AgentId | undefined }): Promise<{ recipients: AgentId[] }>;
   /** Unsent answers follow the artifact to its new version; the bridge drops those whose control is gone. */
   carryOver(workspace: WorkspaceId, artifact: ArtifactId, previous: VersionNumber, next: VersionNumber): Promise<void>;
 }
@@ -27,7 +31,7 @@ export interface FeedbackServiceDeps {
   artifacts: ArtifactService;
   posts: PostService;
   /** Supplied lazily: artifacts call `carryOver`, and agents hold artifacts. */
-  agents: () => Pick<AgentService, 'deliver' | 'isBusy'>;
+  agents: () => Pick<AgentService, 'reserve' | 'deliver' | 'release'>;
 }
 
 const isPending = (set: AnswerSet | undefined): set is AnswerSet =>
@@ -65,40 +69,51 @@ export function createFeedbackService(deps: FeedbackServiceDeps): FeedbackServic
   };
 
   return {
-    async saveAnswers(workspace, id, version, answers) {
-      const artifact = await artifacts.get(workspace, id);
-      const latest = artifact.versions.at(-1)?.version;
-      if (!artifact.versions.some((v) => v.version === version)) throw new NotFoundError(`Artifact ${id} has no version ${version}.`);
-      if (version !== latest) throw new ConflictError(`Version ${version} is read-only: version ${latest} is the latest.`);
-      const set: AnswerSet = { artifact: id, version, answers };
-      await save(workspace, set);
-      return set;
-    },
+    saveAnswers: (workspace, id, version, answers) =>
+      // In turn with new versions: answers saved on one that was just replaced would miss `carryOver`.
+      artifacts.exclusive(workspace, async () => {
+        const artifact = await artifacts.get(workspace, id);
+        const latest = artifact.versions.at(-1)?.version;
+        if (!artifact.versions.some((v) => v.version === version)) throw new NotFoundError(`Artifact ${id} has no version ${version}.`);
+        if (version !== latest) throw new ConflictError(`Version ${version} is read-only: version ${latest} is the latest.`);
+        const set: AnswerSet = { artifact: id, version, answers };
+        await save(workspace, set);
+        return set;
+      }),
     latestAnswers,
     answersFor: async (workspace, artifact, version) => (await store.getAnswers(workspace, artifact, version))?.answers ?? [],
-    async send(workspace, overall) {
-      const groups = await collect(workspace);
-      if (groups.size === 0 && overall) {
-        const fallback = (await store.getWorkspace(workspace))?.agents[0]?.id;
-        if (fallback) groups.set(fallback, []);
-      }
-      if (groups.size === 0) throw new InvalidError('Nothing to send.');
+    send: (workspace, { overall, to } = {}) =>
+      // In turn with new versions: the author must still be the latest when the answers go, and
+      // a version posted meanwhile must not carry over answers that are just being sent.
+      artifacts.exclusive(workspace, async () => {
+        const groups = await collect(workspace);
+        if (groups.size === 0 && overall) {
+          const fallback = to ?? (await store.getWorkspace(workspace))?.agents[0]?.id;
+          if (fallback) groups.set(fallback, []);
+        }
+        if (groups.size === 0) throw new InvalidError('Nothing to send.');
 
-      const agents = deps.agents();
-      const running = [...groups.keys()].filter((agent) => agents.isBusy(agent));
-      if (running.length > 0) throw new ConflictError('An agent this goes to is working. Wait for it to finish, or stop it.');
+        const agents = deps.agents();
+        const recipients = [...groups.keys()];
+        await agents.reserve(workspace, recipients);
 
-      const sentAt = clock.now().toISOString();
-      let remaining = overall;
-      for (const [agent, items] of groups) {
-        const message = formatFeedback(items, remaining);
-        if (!(await agents.deliver(workspace, agent, message))) throw new ConflictError('The agent could not be reached.');
-        await posts.add(workspace, agent, { kind: 'feedback', items, ...(remaining ? { overall: remaining } : {}) });
-        remaining = undefined;
-        for (const { artifact, version, answers } of items) await save(workspace, { artifact, version, answers, sentAt });
-      }
-      return { recipients: [...groups.keys()] };
-    },
+        const sentAt = clock.now().toISOString();
+        const reserved = new Set(recipients);
+        let remaining = overall;
+        try {
+          for (const [agent, items] of groups) {
+            reserved.delete(agent);
+            const message = formatFeedback(items, remaining);
+            if (!(await agents.deliver(workspace, agent, message))) throw new ConflictError('The agent could not be reached.');
+            await posts.add(workspace, agent, { kind: 'feedback', items, ...(remaining ? { overall: remaining } : {}) });
+            remaining = undefined;
+            for (const { artifact, version, answers } of items) await save(workspace, { artifact, version, answers, sentAt });
+          }
+        } finally {
+          agents.release([...reserved]);
+        }
+        return { recipients };
+      }),
     async carryOver(workspace, artifact, previous, next) {
       const set = await store.getAnswers(workspace, artifact, previous);
       if (isPending(set)) await save(workspace, { ...set, version: next });

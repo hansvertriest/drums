@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AddAgent from './components/dialogs/AddAgent.vue';
 import NewWorkspace from './components/dialogs/NewWorkspace.vue';
 import AppHeader from './components/layout/AppHeader.vue';
 import ArtifactStage from './components/layout/ArtifactStage.vue';
@@ -20,6 +21,7 @@ const ui = useUi();
       <ArtifactStage />
     </div>
     <NewWorkspace v-if="ui.newWorkspaceOpen" />
+    <AddAgent v-if="ui.addAgentOpen" />
     <div v-if="ui.error" class="toast" role="alert">
       <span>{{ ui.error }}</span>
       <button type="button" aria-label="Dismiss" @click="ui.error = undefined">×</button>

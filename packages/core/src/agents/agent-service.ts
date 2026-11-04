@@ -1,29 +1,40 @@
-import type { Agent, AgentId, AgentStatus, RoleId, StepDraft, WorkspaceId } from '@drums/protocol';
+import type { Agent, AgentId, AgentStatus, Focus, RoleId, StepDraft, WorkspaceId } from '@drums/protocol';
 import type { ArtifactService } from '../artifacts/artifact-service.js';
 import { ConflictError, NotFoundError } from '../errors.js';
 import type { EventBus } from '../events/event-bus.js';
+import { focusBlock } from '../focus/focus-block.js';
+import { workspaceOverview } from '../overview/overview.js';
 import type { AgentBackend, AgentEvent, AgentSession, AgentSessionOptions } from '../ports/agent-backend.js';
 import type { Clock } from '../ports/clock.js';
 import type { Ids } from '../ports/ids.js';
+import type { RolePicker } from '../ports/role-picker.js';
 import type { Store } from '../ports/store.js';
 import type { PostService } from '../posts/post-service.js';
+import { pickOneRole } from '../roles/pick-role.js';
 import type { RoleRegistry } from '../roles/registry.js';
 import { bindTool } from '../tools/bind.js';
 import type { ToolRegistry } from '../tools/registry.js';
+import { uniqueAgentName } from './agent-name.js';
 
 export interface AgentService {
-  /** Adds an agent to the workspace and gives it its first message. */
+  /** Adds an agent of this role to the workspace and gives it its first message, after an overview. */
   start(workspace: WorkspaceId, role: RoleId, instruction: string): Promise<Agent>;
+  /** Add agent: drums picks the role from the instruction. */
+  add(workspace: WorkspaceId, instruction: string): Promise<Agent>;
   /** A message from the composer: it shows in the thread and goes to the agent. Refused while the agent runs. */
-  send(workspace: WorkspaceId, agent: AgentId, text: string): Promise<void>;
+  send(workspace: WorkspaceId, agent: AgentId, text: string, focus?: Focus): Promise<void>;
+  /** Holds these agents for a `deliver`, all or none: refused if any of them runs, so nothing is half sent. */
+  reserve(workspace: WorkspaceId, agents: AgentId[]): Promise<void>;
+  release(agents: AgentId[]): void;
   /**
-   * Delivers text to the agent without a thread entry. Refused while the agent runs.
+   * Delivers text to a reserved agent without a thread entry.
    * False if the session could not take it; the failure is then in the thread as an error step.
    */
   deliver(workspace: WorkspaceId, agent: AgentId, text: string): Promise<boolean>;
-  isBusy(agent: AgentId): boolean;
   stop(workspace: WorkspaceId, agent: AgentId): Promise<void>;
   requestInput(workspace: WorkspaceId, agent: AgentId, reason: string): Promise<void>;
+  /** How tools name agents to each other. Ids mean nothing to a model. */
+  namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
   /** After a restart nothing is running, whatever the files say. */
   recover(): Promise<void>;
   closeAll(): void;
@@ -39,6 +50,9 @@ export interface AgentServiceDeps {
   tools: ToolRegistry;
   posts: PostService;
   artifacts: ArtifactService;
+  rolePicker: RolePicker;
+  /** What Add agent falls back on when the picker returns nothing usable. */
+  firstRole: RoleId;
 }
 
 /** What only exists while the server runs. */
@@ -50,7 +64,7 @@ interface Live {
 }
 
 export function createAgentService(deps: AgentServiceDeps): AgentService {
-  const { store, backend, events, clock, ids, roles, tools, posts, artifacts } = deps;
+  const { store, backend, events, clock, ids, roles, tools, posts, artifacts, rolePicker, firstRole } = deps;
   const live = new Map<AgentId, Live>();
   const busy = new Set<AgentId>();
 
@@ -137,13 +151,21 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     return state;
   };
 
+  const workingMessage = (names: string[]) => {
+    const [verb, pronoun] = names.length === 1 ? ['is', 'it'] : ['are', 'them'];
+    return `${names.join(' and ')} ${verb} working. Wait for ${pronoun} to finish, or stop ${pronoun}.`;
+  };
+
+  /** Synchronous from the check to the claim, so two callers can never both hold an agent. */
+  const claim = (agent: Agent) => {
+    if (busy.has(agent.id)) throw new ConflictError(workingMessage([agent.name]));
+    busy.add(agent.id);
+  };
+
   const deliver: AgentService['deliver'] = async (workspace, id, text) => {
-    const agent = await findAgent(workspace, id);
-    if (busy.has(id)) throw new ConflictError(`${agent.name} is working. Wait for it to finish, or stop it.`);
-    busy.add(id);
     try {
       await setStatus(workspace, id, 'running');
-      const state = await open(workspace, agent);
+      const state = await open(workspace, await findAgent(workspace, id));
       await state.session.send(text);
       return true;
     } catch (error) {
@@ -154,23 +176,60 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     }
   };
 
+  /** The thread entry goes in before the agent can answer. If it can't be written, the agent is free again. */
+  const claimedPrepare = async <T>(id: AgentId, prepare: () => Promise<T>) => {
+    try {
+      return await prepare();
+    } catch (error) {
+      busy.delete(id);
+      throw error;
+    }
+  };
+
   const service: AgentService = {
     async start(workspace, roleId, instruction) {
       const role = roles.get(roleId);
-      const agent: Agent = { id: ids.next(), role: role.id, name: role.name, status: 'idle' };
-      await store.updateWorkspace(workspace, (w) => ({ ...w, agents: [...w.agents, agent] }));
-      await posts.add(workspace, agent.id, { kind: 'message', text: instruction });
-      await deliver(workspace, agent.id, instruction);
+      const id = ids.next();
+      const added = await store.updateWorkspace(workspace, (w) => ({
+        ...w,
+        agents: [...w.agents, { id, role: role.id, name: uniqueAgentName(role.name, w.agents), status: 'idle' }],
+      }));
+      const agent = added.agents.find((a) => a.id === id) as Agent;
+      busy.add(id);
+      const message = await claimedPrepare(id, async () => {
+        events.emit({ type: 'agent.added', workspace, agent });
+        await posts.add(workspace, id, { kind: 'message', text: instruction });
+        return `${await workspaceOverview({ store, artifacts, posts }, workspace, id)}\n\n${instruction}`;
+      });
+      await deliver(workspace, id, message);
       return agent;
     },
-    async send(workspace, id, text) {
+    async add(workspace, instruction) {
+      const overview = await workspaceOverview({ store, artifacts, posts }, workspace);
+      // No workspace has repos until M3.
+      const pick = await pickOneRole({ picker: rolePicker, roles, fallback: firstRole }, { instruction, overview, hasRepos: false });
+      return service.start(workspace, pick.role, pick.instruction);
+    },
+    async send(workspace, id, text, focus) {
       const agent = await findAgent(workspace, id);
-      if (busy.has(id)) throw new ConflictError(`${agent.name} is working. Wait for it to finish, or stop it.`);
-      await posts.add(workspace, id, { kind: 'message', text });
-      await deliver(workspace, id, text);
+      claim(agent);
+      const message = await claimedPrepare(id, async () => {
+        const block = focus && focusBlock(focus, await artifacts.get(workspace, focus.artifact), await service.namer(workspace));
+        await posts.add(workspace, id, { kind: 'message', text, ...(focus ? { focus } : {}) });
+        return block ? `${block}\n${text}` : text;
+      });
+      await deliver(workspace, id, message);
+    },
+    async reserve(workspace, wanted) {
+      const found = await Promise.all(wanted.map((id) => findAgent(workspace, id)));
+      const running = found.filter((agent) => busy.has(agent.id));
+      if (running.length > 0) throw new ConflictError(workingMessage(running.map((agent) => agent.name)));
+      for (const id of wanted) busy.add(id);
+    },
+    release(agents) {
+      for (const id of agents) busy.delete(id);
     },
     deliver,
-    isBusy: (agent) => busy.has(agent),
     async stop(workspace, id) {
       await findAgent(workspace, id);
       const state = live.get(id);
@@ -183,6 +242,10 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
       if (state) state.wantsInput = true;
       await posts.add(workspace, id, { kind: 'note', title: 'Needs input', message: reason });
       await setStatus(workspace, id, 'input');
+    },
+    async namer(workspace) {
+      const members = (await store.getWorkspace(workspace))?.agents ?? [];
+      return (id) => members.find((agent) => agent.id === id)?.name ?? id;
     },
     async recover() {
       for (const workspace of await store.listWorkspaces()) {

@@ -1,12 +1,13 @@
 import { artifactContract } from './artifact-contract.js';
 import type { RoleDefinition } from './role-definition.js';
+import { workingTogether } from './working-together.js';
 
 export const scoperRole: RoleDefinition = {
   id: 'scoper',
   name: 'Scoper',
   summary: 'Turns a goal into a scope: what is in and out, open questions, decisions. Start here when the goal is still vague.',
   defaultArtifactKind: 'html',
-  tools: ['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input'],
+  tools: ['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed'],
   prompt: `You are the Scoper in drums, where a person steers agents through the documents they make. You turn a goal into a scope they can decide on.
 
 You work only through your tools. You have no files, no shell and no web. The user does not read your plain text as messages, so anything for them goes in an artifact or through post.
@@ -19,6 +20,8 @@ You work only through your tools. You have no files, no shell and no web. The us
 4. If you are waiting on answers, call request_input and end your turn. If nothing is open, just end your turn.
 5. When feedback arrives, call artifact_update: turn the answers into decisions in the document, mark what changed with class="chg", and raise only what is still open.
 6. Don't ask anything in a post that belongs in the document as a control.
+
+${workingTogether}
 
 ${artifactContract}`,
 };

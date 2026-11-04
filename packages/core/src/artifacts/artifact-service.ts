@@ -8,6 +8,7 @@ import type {
   VersionNumber,
   WorkspaceId,
 } from '@drums/protocol';
+import { createTurns } from '../concurrency/turns.js';
 import { NotFoundError } from '../errors.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { Clock } from '../ports/clock.js';
@@ -39,6 +40,11 @@ export interface ArtifactService {
     agent: AgentId,
     input: { id: ArtifactId; baseVersion: VersionNumber; content: string; note: string },
   ): Promise<UpdateResult>;
+  /**
+   * One at a time per workspace: new versions, and whatever depends on which version is the
+   * latest. Don't call `create` or `update` inside it: they take the same turn.
+   */
+  exclusive<T>(workspace: WorkspaceId, work: () => Promise<T>): Promise<T>;
 }
 
 export interface ArtifactServiceDeps {
@@ -53,6 +59,7 @@ export interface ArtifactServiceDeps {
 
 export function createArtifactService(deps: ArtifactServiceDeps): ArtifactService {
   const { store, events, clock, kinds, posts } = deps;
+  const exclusive = createTurns();
 
   const view = async (workspace: WorkspaceId, meta: ArtifactMeta): Promise<Artifact> => ({
     ...meta,
@@ -94,25 +101,32 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
   return {
     async list(workspace) {
       const metas = await store.listArtifacts(workspace);
-      return Promise.all(metas.map((meta) => view(workspace, meta)));
+      const views = await Promise.all(metas.map((meta) => view(workspace, meta)));
+      // One being created right now has no version yet, and nothing to show.
+      return views.filter((artifact) => artifact.versions.length > 0);
     },
     get: async (workspace, id) => view(workspace, await metaOf(workspace, id)),
     read,
     async create(workspace, agent, { title, content, note, kind }) {
       const definition = kinds.get(kind ?? kinds.list()[0]!.id);
       definition.validate(content);
-      const meta = await store.createArtifact(workspace, { title, kind: definition.id, createdAt: clock.now().toISOString() });
-      await publish(workspace, agent, meta, 1, content, note);
-      return { id: meta.id, version: 1 };
+      return exclusive(workspace, async () => {
+        const meta = await store.createArtifact(workspace, { title, kind: definition.id, createdAt: clock.now().toISOString() });
+        await publish(workspace, agent, meta, 1, content, note);
+        return { id: meta.id, version: 1 };
+      });
     },
     async update(workspace, agent, { id, baseVersion, content, note }) {
       const meta = await metaOf(workspace, id);
       kinds.get(meta.kind).validate(content);
-      const latest = await read(workspace, id);
-      if (latest.version === baseVersion && (await publish(workspace, agent, meta, baseVersion + 1, content, note))) {
-        return { status: 'ok', version: baseVersion + 1 };
-      }
-      return { status: 'conflict', latest: await read(workspace, id) };
+      return exclusive(workspace, async (): Promise<UpdateResult> => {
+        const latest = await read(workspace, id);
+        if (latest.version === baseVersion && (await publish(workspace, agent, meta, baseVersion + 1, content, note))) {
+          return { status: 'ok', version: baseVersion + 1 };
+        }
+        return { status: 'conflict', latest: await read(workspace, id) };
+      });
     },
+    exclusive,
   };
 }

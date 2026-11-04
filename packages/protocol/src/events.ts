@@ -1,8 +1,15 @@
 import { z } from 'zod';
-import { AgentStatus } from './agent.js';
+import { Agent, AgentStatus } from './agent.js';
 import { AnswerSet, Artifact } from './artifact.js';
 import { AgentId, ArtifactId, VersionNumber, WorkspaceId } from './ids.js';
 import { Post, Step } from './post.js';
+
+export const AgentAddedEvent = z.object({
+  type: z.literal('agent.added'),
+  workspace: WorkspaceId,
+  agent: Agent,
+});
+export type AgentAddedEvent = z.infer<typeof AgentAddedEvent>;
 
 export const AgentStatusEvent = z.object({
   type: z.literal('agent.status'),
@@ -44,6 +51,7 @@ export type AnswersChangedEvent = z.infer<typeof AnswersChangedEvent>;
 
 /** Everything `core` announces. Add a member here to add an event. */
 export const DomainEvent = z.discriminatedUnion('type', [
+  AgentAddedEvent,
   AgentStatusEvent,
   AgentStepEvent,
   PostCreatedEvent,
@@ -51,3 +59,10 @@ export const DomainEvent = z.discriminatedUnion('type', [
   AnswersChangedEvent,
 ]);
 export type DomainEvent = z.infer<typeof DomainEvent>;
+
+/**
+ * The name of a second, content-free event on each workspace's stream: some workspace's line
+ * in the strip changed, so fetch `GET /api/workspaces` again. It keeps the strip live with no
+ * extra connection, and other workspaces' content stays off this stream.
+ */
+export const WORKSPACES_CHANGED = 'workspaces.changed';

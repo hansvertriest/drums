@@ -2,13 +2,16 @@
 import { computed, ref } from 'vue';
 import { api } from '../../api/client';
 import { useAgents } from '../../stores/agents';
+import { useFocus } from '../../stores/focus';
 import { useThreads } from '../../stores/threads';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
+import FocusChip from './FocusChip.vue';
 
 const workspaces = useWorkspaces();
 const agents = useAgents();
 const threads = useThreads();
+const focus = useFocus();
 const ui = useUi();
 const text = ref('');
 
@@ -28,7 +31,7 @@ const send = async () => {
   if (!message || !agent.value || !workspaces.currentId || running.value) return;
   text.value = '';
   try {
-    await api.sendMessage(workspaces.currentId, agent.value.id, message);
+    await api.sendMessage(workspaces.currentId, agent.value.id, message, focus.focus);
   } catch (error) {
     text.value = message;
     ui.report(error);
@@ -46,6 +49,7 @@ const stop = () => {
       <span>● {{ working }}</span>
       <button type="button" @click="stop">Stop</button>
     </div>
+    <FocusChip />
     <div class="box">
       <textarea
         v-model="text"

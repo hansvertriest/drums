@@ -1,6 +1,6 @@
 import type { Agent } from '@drums/protocol';
 import { describe, expect, it } from 'vitest';
-import { createHarness } from '../testing/harness.js';
+import { createHarness, settle } from '../testing/harness.js';
 import { workspaceSlug } from './slug.js';
 import { workspaceStatus } from './status.js';
 
@@ -37,6 +37,25 @@ describe('WorkspaceService', () => {
     expect(await services.workspaces.list()).toMatchObject([{ id: workspace.id, status: 'running' }]);
     await backend.last().tool('post', { title: 't', message: 'm' });
     expect((await services.workspaces.list())[0]?.lastRole).toBe('scoper');
+  });
+
+  it('sums up several agents by what most needs the user', async () => {
+    const { services, backend, picker } = createHarness();
+    const { workspace } = await services.workspaces.create('Goal');
+    const scoper = backend.last();
+    picker.answer = async () => [{ role: 'designer', instruction: 'Draw' }];
+    await services.agents.add(workspace.id, 'Draw');
+    const designer = backend.last();
+    const status = async () => (await services.workspaces.list())[0]?.status;
+
+    expect(await status()).toBe('running');
+    scoper.emit({ type: 'turn.ended', outcome: 'success' });
+    await settle();
+    expect(await status()).toBe('review');
+    await designer.tool('request_input', { reason: 'Which?' });
+    expect(await status()).toBe('input');
+    await designer.tool('post', { title: 't', message: 'm' });
+    expect((await services.workspaces.list())[0]?.lastRole).toBe('designer');
   });
 
   it('says so when a workspace does not exist', async () => {

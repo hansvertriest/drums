@@ -7,15 +7,12 @@ export const artifactListTool = defineTool({
 Call it before creating an artifact, to check that it doesn't exist yet, and whenever you need an artifact's id.`,
   input: z.object({}),
   async handle(_input, { workspace, services }) {
-    const artifacts = await services.artifacts.list(workspace);
+    const [artifacts, nameOf] = await Promise.all([services.artifacts.list(workspace), services.agents.namer(workspace)]);
     return jsonResult(
-      artifacts.map(({ id, title, kind, versions }) => ({
-        id,
-        title,
-        kind,
-        latest: versions.at(-1)?.version,
-        by: versions.at(-1)?.by,
-      })),
+      artifacts.map(({ id, title, kind, versions }) => {
+        const latest = versions.at(-1);
+        return { id, title, kind, latest: latest?.version, by: latest && nameOf(latest.by) };
+      }),
     );
   },
 });

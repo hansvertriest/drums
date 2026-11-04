@@ -13,6 +13,10 @@ describe('artifactDocument', () => {
     expect(artifactCsp).not.toMatch(/https?:|\*|'self'/);
   });
 
+  it('asks the browser to block peer connections, which default-src does not cover', () => {
+    expect(artifactCsp).toContain("webrtc 'block'");
+  });
+
   it('never makes the iframe same-origin', () => {
     expect(artifactSandbox).toBe('allow-scripts');
   });

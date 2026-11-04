@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AnswerSet, Answers, Artifact, ArtifactVersion } from './artifact.js';
-import { ArtifactKindId, RoleId, ToolId, VersionNumber } from './ids.js';
+import { Focus } from './focus.js';
+import { AgentId, ArtifactKindId, RoleId, ToolId, VersionNumber } from './ids.js';
 import { Post, Step } from './post.js';
 import { Workspace, WorkspaceSummary } from './workspace.js';
 
@@ -37,8 +38,15 @@ export const WorkspaceState = z.object({
 });
 export type WorkspaceState = z.infer<typeof WorkspaceState>;
 
-/** `POST /api/workspaces/:ws/agents/:a/messages`. `focus` joins with M2. */
-export const SendMessageRequest = z.object({ text: z.string().trim().min(1).max(100_000) });
+/** `POST /api/workspaces/:ws/agents`: drums picks the role. Answers with the new `Agent`. */
+export const AddAgentRequest = z.object({ instruction: z.string().trim().min(1).max(20_000) });
+export type AddAgentRequest = z.infer<typeof AddAgentRequest>;
+
+/** `POST /api/workspaces/:ws/agents/:a/messages` */
+export const SendMessageRequest = z.object({
+  text: z.string().trim().min(1).max(100_000),
+  focus: Focus.optional(),
+});
 export type SendMessageRequest = z.infer<typeof SendMessageRequest>;
 
 /** `GET /api/workspaces/:ws/artifacts/:id/versions/:v` */
@@ -55,5 +63,9 @@ export const SaveAnswersRequest = z.object({ version: VersionNumber, answers: An
 export type SaveAnswersRequest = z.infer<typeof SaveAnswersRequest>;
 
 /** `POST /api/workspaces/:ws/send` */
-export const SendFeedbackRequest = z.object({ overall: z.string().trim().max(100_000).optional() });
+export const SendFeedbackRequest = z.object({
+  overall: z.string().trim().max(100_000).optional(),
+  /** Who gets the note when there are no answers to go with: the tab the user has open. */
+  to: AgentId.optional(),
+});
 export type SendFeedbackRequest = z.infer<typeof SendFeedbackRequest>;

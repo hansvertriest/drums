@@ -1,47 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentBackend, AgentEvent, AgentSessionOptions } from '@drums/core';
 import { HealthResponse, VersionResponse, WorkspaceList, WorkspaceState } from '@drums/protocol';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { main, type RunningDrums } from './main.js';
-
-/** A backend a test scripts by hand. The real model is never reached. */
-function fakeBackend() {
-  const sessions: Array<{ options: AgentSessionOptions; received: string[]; emit(event: AgentEvent): void }> = [];
-  const open = async (options: AgentSessionOptions) => {
-    const queue: AgentEvent[] = [];
-    let wake = () => {};
-    let closed = false;
-    const session = {
-      options,
-      received: [] as string[],
-      emit(event: AgentEvent) {
-        queue.push(event);
-        wake();
-      },
-    };
-    sessions.push(session);
-    async function* events(): AsyncGenerator<AgentEvent> {
-      while (!closed) {
-        const event = queue.shift();
-        if (event) yield event;
-        else await new Promise<void>((resolve) => (wake = resolve));
-      }
-    }
-    return {
-      events: events(),
-      send: async (text: string) => void session.received.push(text),
-      interrupt: async () => session.emit({ type: 'turn.ended', outcome: 'error', error: 'interrupted' }),
-      close() {
-        closed = true;
-        wake();
-      },
-    };
-  };
-  const backend: AgentBackend = { start: open, resume: (_id, options) => open(options) };
-  return { backend, sessions };
-}
+import { fakeBackend } from './testing/fake-backend.js';
 
 let dir: string;
 let webRoot: string;
@@ -88,7 +51,7 @@ describe('main', () => {
     const response = await get('/api/health');
     expect(response.status).toBe(200);
     const body = HealthResponse.parse(await response.json());
-    expect(body.roles).toEqual(['scoper']);
+    expect(body.roles).toEqual(['scoper', 'researcher', 'designer', 'reviewer']);
     expect(body.artifactKinds).toEqual(['html']);
     expect(body.tools).toContain('artifact_update');
   });
@@ -118,7 +81,8 @@ describe('the API from request to agent and back', () => {
 
   it('creates a workspace and starts a Scoper on the goal', async () => {
     const { ws, session } = await createWorkspace('Scope search');
-    expect(session.received).toEqual(['Scope search']);
+    expect(session.received).toHaveLength(1);
+    expect(session.received[0]?.endsWith('\n\nScope search')).toBe(true);
     const list = WorkspaceList.parse(await (await get('/api/workspaces')).json());
     expect(list.find((w) => w.id === ws)?.status).toBe('running');
   });

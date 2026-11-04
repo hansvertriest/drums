@@ -34,10 +34,26 @@ describe('the artifacts store', () => {
     expect(store.isLatest).toBe(false);
   });
 
-  it('switches to a new artifact when it arrives', () => {
+  it('switches to a new artifact when asked to bring it forward', () => {
     const store = useArtifacts();
     store.load([artifact('a1', [1])]);
     store.addVersion(artifact('a2', [1]));
     expect(store.currentId).toBe('a2');
+  });
+
+  it('stays put when another agent posts elsewhere, but still lists it', () => {
+    const store = useArtifacts();
+    store.load([artifact('a1', [1])]);
+    store.addVersion(artifact('a2', [1]), false);
+    expect(store.currentId).toBe('a1');
+    expect(store.artifacts.map((a) => a.id)).toEqual(['a1', 'a2']);
+    store.addVersion(artifact('a1', [1, 2]), false);
+    expect(store.viewing).toBe(2);
+  });
+
+  it('puts a first artifact on an empty stage whoever posted it', () => {
+    const store = useArtifacts();
+    store.addVersion(artifact('a1', [1]), false);
+    expect(store.currentId).toBe('a1');
   });
 });

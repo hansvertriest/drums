@@ -26,7 +26,9 @@ const send = async () => {
   if (!workspaces.currentId || !canSend.value) return;
   sending.value = true;
   try {
-    await api.send(workspaces.currentId, overall.value.trim() || undefined);
+    const note = overall.value.trim() || undefined;
+    // With no answers to go with, the note goes to the tab that is open.
+    await api.send(workspaces.currentId, { overall: note, to: groups.value.length === 0 ? agents.current?.id : undefined });
     overall.value = '';
     ui.sendOpen = false;
   } catch (error) {
@@ -46,7 +48,7 @@ const send = async () => {
         <span>{{ answer.label }}</span><b>{{ answer.value.slice(0, 120) }}</b>
       </div>
     </template>
-    <p v-if="groups.length === 0" class="hint">Nothing changed yet.</p>
+    <p v-if="groups.length === 0" class="hint">Nothing changed yet. A note goes to {{ agents.current?.name }}.</p>
     <textarea v-model="overall" aria-label="Overall note" placeholder="Anything else…" />
     <div class="acts">
       <button type="button" @click="ui.sendOpen = false">Close</button>

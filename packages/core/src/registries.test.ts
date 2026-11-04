@@ -25,14 +25,26 @@ describe('built-in registries', () => {
     }
   });
 
-  it('hold the M1 tools for the Scoper', () => {
-    expect(createRoleRegistry().get('scoper').tools).toEqual([
-      'post',
-      'artifact_list',
-      'artifact_read',
-      'artifact_create',
-      'artifact_update',
-      'request_input',
-    ]);
+  it('hold the roles of M2, with drums tools only', () => {
+    const registry = createRoleRegistry();
+    expect(registry.list().map((role) => role.id)).toEqual(['scoper', 'researcher', 'designer', 'reviewer']);
+    for (const role of registry.list()) {
+      expect(role.tools).toEqual(['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed']);
+      expect(role.needsRepo).toBeFalsy();
+    }
+  });
+
+  it('tell every role how to work beside the others', () => {
+    for (const role of createRoleRegistry().list()) {
+      expect(role.prompt, role.id).toContain('<drums-focus>');
+      expect(role.prompt, role.id).toContain('<drums-workspace>');
+      expect(role.prompt, role.id).toContain('request_input');
+      expect(role.prompt, role.id).toContain(`You are the ${role.name}`);
+    }
+  });
+
+  it('give every role a summary for the picker', () => {
+    const summaries = createRoleRegistry().list().map((role) => role.summary);
+    expect(new Set(summaries).size).toBe(summaries.length);
   });
 });

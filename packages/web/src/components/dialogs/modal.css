@@ -1,0 +1,61 @@
+.scrim {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 20, 30, 0.35);
+}
+.modal {
+  width: min(520px, 100%);
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 20px 60px var(--shadow);
+}
+h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 600;
+}
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+.acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.acts button {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.acts .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.acts .primary:disabled {
+  opacity: 0.45;
+}

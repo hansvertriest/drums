@@ -2,6 +2,7 @@ import { createArtifactKindRegistry } from '../artifacts/registry.js';
 import { createEventBus } from '../events/event-bus.js';
 import type { Clock } from '../ports/clock.js';
 import type { Ids } from '../ports/ids.js';
+import type { RolePick, RolePickRequest } from '../ports/role-picker.js';
 import { createRoleRegistry } from '../roles/registry.js';
 import { createServices } from '../services.js';
 import { createToolRegistry } from '../tools/registry.js';
@@ -19,6 +20,15 @@ export function createHarness() {
   let counter = 0;
   const clock: Clock = { now: () => new Date(Date.UTC(2026, 0, 1, 0, 0, tick++)) };
   const ids: Ids = { next: () => `id${++counter}` };
+  /** What the role picker answers, and what it was asked. */
+  const picker = {
+    answer: (): Promise<RolePick[]> => Promise.resolve([]),
+    asked: [] as RolePickRequest[],
+    pick(request: RolePickRequest) {
+      picker.asked.push(request);
+      return picker.answer();
+    },
+  };
   const services = createServices({
     store,
     backend,
@@ -28,9 +38,10 @@ export function createHarness() {
     roles: createRoleRegistry(),
     tools: createToolRegistry(),
     artifactKinds: createArtifactKindRegistry(),
+    rolePicker: picker,
     firstRole: 'scoper',
   });
-  return { store, backend, events, seen, services };
+  return { store, backend, events, seen, services, picker };
 }
 
 /** Lets the agent service's event loop catch up with what a test emitted. */

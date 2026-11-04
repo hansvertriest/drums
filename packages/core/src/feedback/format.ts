@@ -1,4 +1,5 @@
 import type { Answer, VersionNumber } from '@drums/protocol';
+import { escapeXml } from '../text/escape-xml.js';
 
 export interface FeedbackGroup {
   artifact: string;
@@ -6,10 +7,6 @@ export interface FeedbackGroup {
   version: VersionNumber;
   answers: Answer[];
 }
-
-/** Answers come from an iframe running agent-written code, so nothing in them may close a tag. */
-const escapeXml = (text: string) =>
-  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const overallLine = (overall: string | undefined) => (overall ? [`  <overall>${escapeXml(overall)}</overall>`] : []);
 
