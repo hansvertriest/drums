@@ -21,6 +21,13 @@ export const AgentStatusEvent = z.object({
 });
 export type AgentStatusEvent = z.infer<typeof AgentStatusEvent>;
 
+export const AgentClosedEvent = z.object({
+  type: z.literal('agent.closed'),
+  workspace: WorkspaceId,
+  agent: AgentId,
+});
+export type AgentClosedEvent = z.infer<typeof AgentClosedEvent>;
+
 export const AgentStepEvent = z.object({
   type: z.literal('agent.step'),
   workspace: WorkspaceId,
@@ -42,6 +49,13 @@ export const ArtifactVersionEvent = z.object({
   version: VersionNumber,
 });
 export type ArtifactVersionEvent = z.infer<typeof ArtifactVersionEvent>;
+
+export const ArtifactArchivedEvent = z.object({
+  type: z.literal('artifact.archived'),
+  workspace: WorkspaceId,
+  artifact: Artifact,
+});
+export type ArtifactArchivedEvent = z.infer<typeof ArtifactArchivedEvent>;
 
 export const AnswersChangedEvent = z.object({
   type: z.literal('answers.changed'),
@@ -79,9 +93,11 @@ export type PrsOpenedEvent = z.infer<typeof PrsOpenedEvent>;
 export const DomainEvent = z.discriminatedUnion('type', [
   AgentAddedEvent,
   AgentStatusEvent,
+  AgentClosedEvent,
   AgentStepEvent,
   PostCreatedEvent,
   ArtifactVersionEvent,
+  ArtifactArchivedEvent,
   AnswersChangedEvent,
   PermissionChangedEvent,
   MapChangedEvent,

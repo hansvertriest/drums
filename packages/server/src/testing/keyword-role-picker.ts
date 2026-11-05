@@ -43,7 +43,7 @@ export function createKeywordRolePicker(): RolePicker {
         .flatMap((candidate) => match(words, candidate) ?? [])
         .sort((a, b) => b.hits - a.hits || a.first - b.first);
       const picks: RolePick[] = ranked.map(({ candidate }) => ({ role: candidate.id, instruction: goal }));
-      return exactlyOne ? picks.slice(0, 1) : picks;
+      return { picks: exactlyOne ? picks.slice(0, 1) : picks };
     },
   };
 }

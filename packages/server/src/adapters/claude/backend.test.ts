@@ -162,21 +162,13 @@ describe('a session with a shell and files', () => {
       expect(options.allowDangerouslySkipPermissions).toBeFalsy();
       expect(options.permissionPrompts).toBeUndefined();
       expect(options.canUseTool).toBeTypeOf('function');
-      expect(options.tools).toEqual(['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep']);
-      expect(options.settingSources).toEqual([]);
-      expect(options.strictMcpConfig).toBe(true);
+      expect(options.tools).toBeUndefined();
+      expect(options.hooks).toBeUndefined();
+      expect(options.disallowedTools).toEqual(['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode']);
+      expect(options.settingSources).toEqual(['user', 'project', 'local']);
+      expect(options.strictMcpConfig).toBe(false);
+      expect(Object.keys(options.mcpServers ?? {})).toEqual(['drums']);
     }
-  });
-
-  it('still denies a tool it was not given', async () => {
-    const { backend, calls } = start([]);
-    await backend.start(coder);
-    const hook = calls[0]!.options.hooks!.PreToolUse![0]!.hooks[0]!;
-    const signal = new AbortController().signal;
-    const input = (tool_name: string) => ({ hook_event_name: 'PreToolUse', tool_name }) as never;
-    expect(await hook(input('Bash'), undefined, { signal })).toEqual({});
-    expect(await hook(input('mcp__drums__post'), undefined, { signal })).toEqual({});
-    expect(await hook(input('WebFetch'), undefined, { signal })).toMatchObject({ hookSpecificOutput: { permissionDecision: 'deny' } });
   });
 
   it('can run without the classifier from the start', async () => {

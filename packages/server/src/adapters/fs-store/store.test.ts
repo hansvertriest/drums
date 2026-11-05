@@ -30,6 +30,15 @@ describe('workspaces', () => {
     expect(store.workspacePath('w1')).toBe(join(root, 'w1'));
   });
 
+  it('keeps images under .drums, never overwrites one, and refuses names that are no image', async () => {
+    const path = await store.saveImage('w1', 'i1.png', new Uint8Array([7]));
+    expect(path).toBe(data('images', 'i1.png'));
+    expect(await store.readImage('w1', 'i1.png')).toEqual(Buffer.from([7]));
+    expect(await store.readImage('w1', 'i2.png')).toBeUndefined();
+    await expect(store.saveImage('w1', 'i1.png', new Uint8Array([8]))).rejects.toThrow();
+    await expect(store.saveImage('w1', '../x.png', new Uint8Array([8]))).rejects.toThrow();
+  });
+
   it('is empty when the root does not exist yet', async () => {
     expect(await createFsStore(join(root, 'nope')).listWorkspaces()).toEqual([]);
   });

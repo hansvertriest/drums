@@ -42,9 +42,10 @@ export function createHarness() {
     answer: (request: RolePickRequest): Promise<RolePick[]> =>
       Promise.resolve(request.hasRepos ? [{ role: request.candidates.find((c) => c.id === 'coder')?.id ?? 'coder', instruction: request.goal }] : []),
     asked: [] as RolePickRequest[],
-    pick(request: RolePickRequest) {
+    title: undefined as string | undefined,
+    async pick(request: RolePickRequest) {
       picker.asked.push(request);
-      return picker.answer(request);
+      return { picks: await picker.answer(request), title: picker.title };
     },
   };
   const code = createFakeCode();

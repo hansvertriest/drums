@@ -7,7 +7,7 @@ const candidates = createRoleRegistry()
   .map(({ id, summary }) => ({ id, summary }));
 
 const pickFor = async (goal: string) =>
-  (await createKeywordRolePicker().pick({ goal, candidates, hasRepos: false, exactlyOne: true })).map((pick) => pick.role);
+  (await createKeywordRolePicker().pick({ goal, candidates, hasRepos: false, exactlyOne: true })).picks.map((pick) => pick.role);
 
 describe('the keyword role picker', () => {
   it('finds the role from the words in its summary', async () => {
@@ -28,17 +28,17 @@ describe('the keyword role picker', () => {
   });
 
   it('keeps the instruction as it was given', async () => {
-    const [pick] = await createKeywordRolePicker().pick({ goal: 'Review IT', candidates, hasRepos: false, exactlyOne: true });
+    const [pick] = (await createKeywordRolePicker().pick({ goal: 'Review IT', candidates, hasRepos: false, exactlyOne: true })).picks;
     expect(pick?.instruction).toBe('Review IT');
   });
 
   it('returns every match unless asked for one', async () => {
-    const picks = await createKeywordRolePicker().pick({ goal: 'Review the scope', candidates, hasRepos: false });
+    const { picks } = await createKeywordRolePicker().pick({ goal: 'Review the scope', candidates, hasRepos: false });
     expect(picks.map((pick) => pick.role)).toEqual(['reviewer', 'scoper']);
   });
 
   it('knows only the candidates it is given', async () => {
-    const picks = await createKeywordRolePicker().pick({
+    const { picks } = await createKeywordRolePicker().pick({
       goal: 'water the plants',
       candidates: [{ id: 'gardener', summary: 'Waters plants' }],
       hasRepos: false,

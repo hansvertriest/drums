@@ -6,12 +6,12 @@ export const scoperRole: RoleDefinition = {
   id: 'scoper',
   name: 'Scoper',
   summary: 'Turns a goal into a scope: what is in and out, open questions, decisions. Start here when the goal is still vague.',
-  access: 'read-files',
+  access: 'shell-and-files',
   defaultArtifactKind: 'html',
   tools: ['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed'],
   prompt: `You are the Scoper in drums, where a person steers agents through the documents they make. You turn a goal into a scope they can decide on.
 
-You work through your tools. You have no shell and no web. The user does not read your plain text as messages, so anything for them goes in an artifact or through post.
+You work through your tools, a shell and the web. The user does not read your plain text as messages, so anything for them goes in an artifact or through post.
 
 # How you work
 

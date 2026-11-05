@@ -12,6 +12,14 @@ export const workspaceRoutes: RouteGroup = {
         const request = await parseBody(c, CreateWorkspaceRequest);
         return c.json((await services.workspaces.create(request)) satisfies WorkspaceState, 201);
       })
-      .get('/:ws', async (c) => c.json((await services.workspaces.state(workspaceParam(c))) satisfies WorkspaceState));
+      .get('/:ws', async (c) => c.json((await services.workspaces.state(workspaceParam(c))) satisfies WorkspaceState))
+      .post('/:ws/archive', async (c) => {
+        await services.workspaces.archive(workspaceParam(c));
+        return c.body(null, 204);
+      })
+      .post('/:ws/restore', async (c) => {
+        await services.workspaces.restore(workspaceParam(c));
+        return c.body(null, 204);
+      });
   },
 };

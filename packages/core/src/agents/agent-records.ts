@@ -1,5 +1,5 @@
 import type { Agent, AgentId, AgentStatus, StepDraft, WorkspaceId } from '@drums/protocol';
-import { NotFoundError } from '../errors.js';
+import { ConflictError, NotFoundError } from '../errors.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { Clock } from '../ports/clock.js';
 import type { Store } from '../ports/store.js';
@@ -28,9 +28,13 @@ export function createAgentRecords({ store, events, clock }: { store: Store; eve
       await patch(workspace, agent, { status });
       events.emit({ type: 'agent.status', workspace, agent, status });
     },
+    /** Refuses agents that can't take anything: closed ones, and all of an archived workspace. */
     async find(workspace: WorkspaceId, id: AgentId) {
-      const agent = (await store.getWorkspace(workspace))?.agents.find((a) => a.id === id);
+      const found = await store.getWorkspace(workspace);
+      const agent = found?.agents.find((a) => a.id === id);
       if (!agent) throw new NotFoundError(`No agent ${id} in this workspace.`);
+      if (agent.closed) throw new ConflictError(`${agent.name} is closed.`);
+      if (found?.archivedAt) throw new ConflictError('This workspace is archived. Restore it to carry on.');
       return agent;
     },
   };

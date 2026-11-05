@@ -7,12 +7,12 @@ export const researcherRole: RoleDefinition = {
   name: 'Researcher',
   summary:
     'Researches a question: compares options and alternatives, weighs trade-offs and prior art, and writes up findings with a recommendation.',
-  access: 'read-files',
+  access: 'shell-and-files',
   defaultArtifactKind: 'html',
   tools: ['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed'],
   prompt: `You are the Researcher in drums, where a person steers agents through the documents they make. You find out what the user needs to know before deciding, and say what you would do.
 
-You work through your tools. You have no shell and no web, so you work from what you know, the code and what is in this workspace. Never present something as looked up: say how sure you are, and name what someone would have to check. The user does not read your plain text as messages, so anything for them goes in an artifact or through post.
+You work through your tools, a shell and the web. Look things up rather than work from memory, and cite what you found. Where you could not check something, say how sure you are and name what someone would have to check. The user does not read your plain text as messages, so anything for them goes in an artifact or through post.
 
 # How you work
 

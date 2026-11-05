@@ -78,9 +78,10 @@ describe('the thread', () => {
   const steps: Step[] = [
     { kind: 'tool', seq: 1, agent: 'ag', at, tool: 'artifact_create', summary: 'title: Scope' },
     { kind: 'error', seq: 2, agent: 'ag', at, text: 'Not logged in' },
+    { kind: 'text', seq: 3, agent: 'ag', at, text: 'Thinking **aloud**' },
   ];
 
-  it('shows posts, errors, and tool steps only with the toggle on', async () => {
+  it('shows posts and errors, and what the agent says and does only with the toggle on', async () => {
     const store = withWorkspace();
     useThreads().load(posts, steps);
     const app = shell(store);
@@ -89,8 +90,10 @@ describe('the thread', () => {
     expect(chat.text()).toContain('A note');
     expect(chat.text()).toContain('Not logged in');
     expect(chat.text()).not.toContain('artifact_create');
+    expect(chat.text()).not.toContain('Thinking');
     await chat.get('button.steps').trigger('click');
     expect(chat.text()).toContain('artifact_create');
+    expect(chat.get('.text b').text()).toBe('aloud');
   });
 
   it('keeps agent markup out of the page', () => {
@@ -110,7 +113,54 @@ describe('the thread', () => {
   });
 });
 
+describe('artifact tabs', () => {
+  it('archives an artifact, hides its tab, and restores it from the archived list', async () => {
+    const store = withWorkspace();
+    const second = { ...artifact([1]), id: 'a2', title: 'Design' };
+    useArtifacts().load([artifact([1]), second]);
+    const app = shell(store);
+    const stage = () => app.get('main.stage');
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ...artifact([1]), archived: true }), { status: 200 }));
+    await app.get('button[aria-label="Archive Scope"]').trigger('click');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/artifacts/a1/archive', expect.objectContaining({ method: 'POST' }));
+    expect(stage().findAll('[role="tab"]').map((t) => t.text())).toEqual(['Design v1']);
+    expect(useArtifacts().currentId).toBe('a2');
+    await stage().get('button.toggle').trigger('click');
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(artifact([1])), { status: 200 }));
+    await app.get('button[aria-label="Restore Scope"]').trigger('click');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/artifacts/a1/restore', expect.objectContaining({ method: 'POST' }));
+    expect(stage().find('button.toggle').exists()).toBe(false);
+    expect(stage().findAll('[role="tab"]')).toHaveLength(2);
+  });
+});
+
 describe('the composer', () => {
+  it('sends pasted images with the message, and lets one be removed first', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+    const app = shell(withWorkspace());
+    const textarea = app.get('textarea[aria-label="Message"]');
+    const file = (name: string) => new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' });
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { files: [file('a.png'), file('b.png')] } });
+    textarea.element.dispatchEvent(event);
+    await vi.waitFor(() => expect(app.findAll('.composer .image')).toHaveLength(2));
+    expect(event.defaultPrevented).toBe(true);
+    await app.get('button[aria-label="Remove image 2"]').trigger('click');
+    await app.get('form.composer').trigger('submit');
+    await flushPromises();
+    const body = JSON.parse(fetchMock.mock.calls.at(-1)![1].body as string);
+    expect(body).toEqual({ text: '', images: [{ type: 'image/png', data: 'AQID' }] });
+    expect(app.findAll('.composer .image')).toHaveLength(0);
+  });
+
+  it('shows the images of a sent message', () => {
+    const store = withWorkspace();
+    useThreads().load([{ kind: 'message', seq: 1, agent: 'ag', at, text: '', images: ['i1.png'] }], []);
+    expect(shell(store).get('.user img').attributes('src')).toBe('/api/workspaces/w1/images/i1.png');
+  });
+
   it('sends a message to the agent', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
     const app = shell(withWorkspace());
@@ -230,6 +280,19 @@ describe('agent tabs', () => {
     await app.get('form.composer').trigger('submit');
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/agents/ag/messages', expect.anything());
+  });
+
+  it('closes an agent after confirming, and opens the next tab', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('confirm', () => true);
+    const store = two();
+    const app = shell(store);
+    await app.get('button[aria-label="Close Scoper"]').trigger('click');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/agents/ag/close', expect.objectContaining({ method: 'POST' }));
+    expect(app.get('section[aria-label="Chat"]').findAll('[role="tab"]').map((t) => t.text())).toEqual(['Reviewer']);
+    expect(useAgents().current?.id).toBe('ag2');
+    expect(useAgents().nameOf('ag')).toBe('Scoper');
   });
 
   it('shows Stop only for an agent that runs', async () => {

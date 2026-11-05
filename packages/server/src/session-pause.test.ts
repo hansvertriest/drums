@@ -13,7 +13,7 @@ const GRACE_MS = 500;
 vi.setConfig({ testTimeout: 60_000 });
 const dirs = tempDirs();
 const fake = fakeBackend();
-const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => (hasRepos ? [{ role: 'coder', instruction: goal }] : []) };
+const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => ({ picks: hasRepos ? [{ role: 'coder', instruction: goal }] : [] }) };
 const PATH = process.env.PATH;
 let parent: string;
 let drums: RunningDrums;

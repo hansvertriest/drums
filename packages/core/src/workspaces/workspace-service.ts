@@ -21,6 +21,9 @@ export interface WorkspaceService {
   create(request: Pick<CreateWorkspaceRequest, 'goal'> & Partial<CreateWorkspaceRequest>): Promise<WorkspaceState>;
   list(): Promise<WorkspaceSummary[]>;
   state(id: WorkspaceId): Promise<WorkspaceState>;
+  /** Stops its agents and takes it out of the strip. Worktrees, branches and everything posted stay. */
+  archive(id: WorkspaceId): Promise<void>;
+  restore(id: WorkspaceId): Promise<void>;
 }
 
 export interface WorkspaceServiceDeps {
@@ -66,15 +69,17 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
       const id = workspaceSlug(goal, ids.next());
       const createdAt = clock.now().toISOString();
       if (requested.length === 0) {
-        await store.createWorkspace({ id, goal, createdAt, agents: [], repos: [], permissions: [], nudges: {} });
-        await startAll(id, await pick(goal, false));
+        const { picks, title } = await pick(goal, false);
+        await store.createWorkspace({ id, goal, ...(title ? { title } : {}), createdAt, agents: [], repos: [], permissions: [], nudges: {} });
+        await startAll(id, picks);
         return state(id);
       }
       const name = branch ?? `drums/${id}`;
       const { repos, failedInstalls } = await code.attach(id, requested, name);
       await store.createWorkspace({ id, goal, createdAt, agents: [], repos, branch: name, permissions: [], nudges: {} });
       await artifacts.createEmpty(id, { title: branchMapArtifactKind.name, kind: branchMapArtifactKind.id });
-      const picks = await pick(goal, true);
+      const { picks, title } = await pick(goal, true);
+      if (title) await store.updateWorkspace(id, (w) => ({ ...w, title }));
       await code.openAll(id);
       const [first] = await startAll(id, picks);
       if (first) {
@@ -88,7 +93,7 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
       const workspaces = await store.listWorkspaces();
       return Promise.all(
         workspaces.map(async (workspace) => {
-          const { id, goal, agents: members, repos } = workspace;
+          const { id, goal, title, agents: members, repos, archivedAt } = workspace;
           const last = (await posts.list(id)).filter(isAuthored).at(-1);
           const lastRole = members.find((agent) => agent.id === last?.agent)?.role;
           const prs = repos.flatMap(({ pr }) => (pr ? [pr] : []));
@@ -96,15 +101,26 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
           return {
             id,
             goal,
+            ...(title ? { title } : {}),
             status: workspaceStatus(members, prs.length > 0),
             ...(lastRole ? { lastRole } : {}),
             ...(last ? { lastPost: last.seq } : {}),
             ...(counts ? { additions: counts.additions, deletions: counts.deletions } : {}),
             ...(prs.length > 0 ? { prCount: prs.length, ...(prs.length === 1 ? { pr: prs[0]!.number } : {}) } : {}),
+            ...(archivedAt ? { archived: true } : {}),
           };
         }),
       );
     },
     state,
+    async archive(id) {
+      await state(id);
+      await store.updateWorkspace(id, (w) => ({ ...w, archivedAt: clock.now().toISOString() }));
+      await agents.pause(id);
+    },
+    async restore(id) {
+      await state(id);
+      await store.updateWorkspace(id, (w) => ({ ...w, archivedAt: undefined }));
+    },
   };
 }

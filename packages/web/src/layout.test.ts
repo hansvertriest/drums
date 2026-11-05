@@ -154,6 +154,21 @@ describe('collapsing the rail', () => {
   });
 });
 
+describe('resizing the rail', () => {
+  it('widens with the keyboard within bounds, remembers it, and resets on double-click', async () => {
+    const app = withWorkspace();
+    const handle = app.get('[aria-label="Resize chat"]');
+    expect(app.get('.body').attributes('style')).toContain('--rail-width: 360px');
+    await handle.trigger('keydown', { key: 'ArrowRight' });
+    expect(app.get('.body').attributes('style')).toContain('--rail-width: 384px');
+    expect(localStorage.getItem('drums.rail-width')).toBe('384');
+    useUi().setRailWidth(10);
+    expect(useUi().railWidth).toBe(280);
+    await handle.trigger('dblclick');
+    expect(useUi().railWidth).toBe(360);
+  });
+});
+
 describe('phones', () => {
   it('opens the drawer from the menu button and closes it on picking a workspace', async () => {
     const app = withWorkspace();

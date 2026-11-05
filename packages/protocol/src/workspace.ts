@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Agent } from './agent.js';
-import { BranchName, RepoName, RoleId, WorkspaceId } from './ids.js';
+import { ArtifactId, BranchName, RepoName, RoleId, WorkspaceId } from './ids.js';
 import { PermissionRequest } from './permission.js';
 
 export const PullRequest = z.object({
@@ -33,6 +33,8 @@ export type NudgeCounts = z.infer<typeof NudgeCounts>;
 export const Workspace = z.object({
   id: WorkspaceId,
   goal: z.string().min(1),
+  /** A short name for the work, made when it starts. Without one, the goal is shown. */
+  title: z.string().min(1).optional(),
   createdAt: z.iso.datetime(),
   agents: z.array(Agent),
   repos: z.array(WorkspaceRepo).default([]),
@@ -41,6 +43,9 @@ export const Workspace = z.object({
   /** Every permission request, answered or not: the thread shows them as rows. */
   permissions: z.array(PermissionRequest).default([]),
   nudges: NudgeCounts.default({}),
+  /** Archived by the user: out of the strip, its sessions stopped, until it is restored. */
+  archivedAt: z.iso.datetime().optional(),
+  archivedArtifacts: z.array(ArtifactId).optional(),
 });
 export type Workspace = z.infer<typeof Workspace>;
 
@@ -51,6 +56,7 @@ export type WorkspaceStatus = z.infer<typeof WorkspaceStatus>;
 export const WorkspaceSummary = z.object({
   id: WorkspaceId,
   goal: z.string(),
+  title: z.string().optional(),
   status: WorkspaceStatus,
   /** The role that posted last, for the strip. */
   lastRole: RoleId.optional(),
@@ -62,5 +68,6 @@ export const WorkspaceSummary = z.object({
   /** The open PR's number, when there is exactly one. */
   pr: z.number().int().positive().optional(),
   prCount: z.number().int().nonnegative().optional(),
+  archived: z.boolean().optional(),
 });
 export type WorkspaceSummary = z.infer<typeof WorkspaceSummary>;

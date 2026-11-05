@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { ArtifactId, WorkspaceId, type VersionNumber } from '@drums/protocol';
+import { ArtifactId, ImageName, WorkspaceId, type VersionNumber } from '@drums/protocol';
 
 /** The layout of spec §8, in one place. Ids are checked here too, as they become paths. */
 export function createPaths(root: string) {
@@ -13,6 +13,7 @@ export function createPaths(root: string) {
     workspaceFile: (id: string) => join(data(id), 'workspace.json'),
     posts: (id: string) => join(data(id), 'posts'),
     steps: (id: string) => join(data(id), 'steps'),
+    image: (id: string, name: string) => join(data(id), 'images', ImageName.parse(name)),
     artifacts,
     artifact,
     meta: (ws: string, id: string) => join(artifact(ws, id), 'meta.json'),

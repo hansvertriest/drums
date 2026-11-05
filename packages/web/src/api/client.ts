@@ -2,6 +2,7 @@ import {
   Agent,
   AnswerSet,
   ApiError as ApiErrorBody,
+  Artifact,
   MapState,
   OpenPrsResponse,
   PrDrafts,
@@ -11,6 +12,7 @@ import {
   WorkspaceState,
   type Answer,
   type CreateWorkspaceRequest,
+  type ImageType,
   type OpenPrsRequest,
   type PermissionDecision,
   type Focus,
@@ -50,10 +52,17 @@ export const api = {
   projects: () => request('/api/projects', ProjectList),
   workspace: (ws: string) => request(workspacePath(ws), WorkspaceState),
   addAgent: (ws: string, instruction: string) => request(`${workspacePath(ws)}/agents`, Agent, withBody('POST', { instruction })),
-  sendMessage: (ws: string, agent: string, text: string, focus?: Focus) =>
-    request(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/messages`, undefined, withBody('POST', { text, focus })),
+  sendMessage: (ws: string, agent: string, text: string, focus?: Focus, images: Array<{ type: ImageType; data: string }> = []) =>
+    request(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/messages`, undefined, withBody('POST', { text, focus, ...(images.length > 0 ? { images } : {}) })),
+  imageUrl: (ws: string, name: string) => `${workspacePath(ws)}/images/${encodeURIComponent(name)}`,
   stop: (ws: string, agent: string) =>
     request(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/stop`, undefined, { method: 'POST' }),
+  closeAgent: (ws: string, agent: string) =>
+    request<void>(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/close`, undefined, { method: 'POST' }),
+  archive: (ws: string) => request<void>(`${workspacePath(ws)}/archive`, undefined, { method: 'POST' }),
+  restore: (ws: string) => request<void>(`${workspacePath(ws)}/restore`, undefined, { method: 'POST' }),
+  setArtifactArchived: (ws: string, artifact: string, archived: boolean) =>
+    request(`${workspacePath(ws)}/artifacts/${encodeURIComponent(artifact)}/${archived ? 'archive' : 'restore'}`, Artifact, { method: 'POST' }),
   version: (ws: string, artifact: string, version: VersionNumber) =>
     request(`${workspacePath(ws)}/artifacts/${encodeURIComponent(artifact)}/versions/${version}`, VersionResponse),
   saveAnswers: (ws: string, artifact: string, version: VersionNumber, answers: Answer[]) =>

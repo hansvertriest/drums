@@ -258,10 +258,10 @@ describe('the role', () => {
     expect(harness.picker.asked.at(-1)?.hasRepos).toBe(true);
   });
 
-  it('roles without a shell only get to read', async () => {
+  it('roles besides the Coder get a shell too', async () => {
     const harness = createHarness();
     await harness.services.workspaces.create({ goal: 'scope' });
-    expect(harness.backend.last().options.access).toBe('read-files');
+    expect(harness.backend.last().options.access).toBe('shell-and-files');
   });
 
   it('tells a new agent the branch and repos in its overview', async () => {

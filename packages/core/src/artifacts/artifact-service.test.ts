@@ -43,6 +43,18 @@ describe('ArtifactService', () => {
     await settle();
   });
 
+  it('archives and restores an artifact, and a new version brings it back', async () => {
+    const { services, seen, ws, agent } = await setup();
+    await services.artifacts.create(ws, agent, { title: 'Scope', content: '<p>a</p>', note: 'first' });
+    expect(await services.artifacts.setArchived(ws, 'a1', true)).toMatchObject({ id: 'a1', archived: true });
+    expect(seen.some((e) => e.type === 'artifact.archived' && e.artifact.archived)).toBe(true);
+    expect((await services.artifacts.list(ws))[0]).toMatchObject({ archived: true });
+    expect((await services.artifacts.setArchived(ws, 'a1', false)).archived).toBeUndefined();
+    await services.artifacts.setArchived(ws, 'a1', true);
+    await services.artifacts.update(ws, agent, { id: 'a1', baseVersion: 1, content: '<p>b</p>', note: 'second' });
+    expect((await services.artifacts.get(ws, 'a1')).archived).toBeUndefined();
+  });
+
   it('says so when an artifact or version does not exist', async () => {
     const { services, ws } = await setup();
     await expect(services.artifacts.read(ws, 'a9')).rejects.toThrow('No artifact a9');

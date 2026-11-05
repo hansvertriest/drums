@@ -7,7 +7,7 @@ import { workspaceParam } from './validate.js';
 const HEARTBEAT_MS = 15_000;
 
 /** What changes a workspace's line in the strip: its status, and the role that posted last. */
-const SUMMARY_EVENTS: ReadonlyArray<DomainEvent['type']> = ['agent.added', 'agent.status', 'post.created', 'permission.changed', 'prs.opened'];
+const SUMMARY_EVENTS: ReadonlyArray<DomainEvent['type']> = ['agent.added', 'agent.status', 'agent.closed', 'post.created', 'permission.changed', 'prs.opened'];
 
 /**
  * Server-Sent Events: the domain events of one workspace, as plain messages. A second kind of

@@ -21,10 +21,16 @@ export interface RolePickRequest {
   exactlyOne?: boolean;
 }
 
+export interface RolePickAnswer {
+  picks: RolePick[];
+  /** New workspace: a short name for the work, to show instead of the goal. */
+  title?: string | undefined;
+}
+
 export interface RolePicker {
   /**
    * Chooses from `candidates`. May return nothing, and rejects if it can't answer in reasonable
    * time: a hung call must end here, because creating a workspace waits for it.
    */
-  pick(request: RolePickRequest): Promise<RolePick[]>;
+  pick(request: RolePickRequest): Promise<RolePickAnswer>;
 }

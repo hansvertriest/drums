@@ -36,10 +36,15 @@ export const CheckpointPost = Base.extend({
   repos: z.array(CheckpointRepo),
 });
 
+/** A pasted image, kept in the workspace. The extension says its type. */
+export const ImageName = z.string().regex(/^[A-Za-z0-9-]{1,64}\.(png|jpg|gif|webp)$/);
+export type ImageName = z.infer<typeof ImageName>;
+
 /** What the user typed in the composer. */
 export const MessagePost = Base.extend({
   kind: z.literal('message'),
   text: z.string(),
+  images: z.array(ImageName).optional(),
   /** What the user was looking at, so the thread can still say what "this" meant. */
   focus: Focus.optional(),
 });

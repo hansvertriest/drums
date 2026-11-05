@@ -1,6 +1,7 @@
-import type { Agent, AgentId, Focus, NudgeCounts, PermissionDecision, RoleId, WorkspaceId } from '@drums/protocol';
+import type { Agent, AgentId, Focus, ImageType, NudgeCounts, PermissionDecision, RoleId, WorkspaceId } from '@drums/protocol';
 import type { ArtifactService } from '../artifacts/artifact-service.js';
 import type { CodeService } from '../code/code-service.js';
+import { ConflictError } from '../errors.js';
 import type { EventBus } from '../events/event-bus.js';
 import { focusBlock } from '../focus/focus-block.js';
 import { workspaceOverview } from '../overview/overview.js';
@@ -31,7 +32,7 @@ export interface AgentService {
   /** Add agent: drums picks the role from the instruction. */
   add(workspace: WorkspaceId, instruction: string): Promise<Agent>;
   /** A message from the composer: it shows in the thread and goes to the agent. Refused while the agent runs. */
-  send(workspace: WorkspaceId, agent: AgentId, text: string, focus?: Focus): Promise<void>;
+  send(workspace: WorkspaceId, agent: AgentId, text: string, focus?: Focus, images?: PastedImage[]): Promise<void>;
   /** Holds these agents for a `deliver`, all or none: refused if any of them runs, so nothing is half sent. */
   reserve(workspace: WorkspaceId, agents: AgentId[]): Promise<void>;
   release(agents: AgentId[]): void;
@@ -41,6 +42,10 @@ export interface AgentService {
    */
   deliver(workspace: WorkspaceId, agent: AgentId, text: string): Promise<boolean>;
   stop(workspace: WorkspaceId, agent: AgentId): Promise<void>;
+  /** Ends the agent's session, whatever it was doing, and takes it out of the workspace. What it posted stays. */
+  close(workspace: WorkspaceId, agent: AgentId): Promise<void>;
+  /** Ends every session in the workspace, as for archiving. The agents resume with their next message. */
+  pause(workspace: WorkspaceId): Promise<void>;
   requestInput(workspace: WorkspaceId, agent: AgentId, reason: string): Promise<void>;
   /** Allow or deny a call the agent's turn is waiting on. The turn goes on either way. */
   answerPermission(workspace: WorkspaceId, agent: AgentId, id: string, decision: PermissionDecision): Promise<void>;
@@ -57,6 +62,13 @@ export interface AgentService {
   recover(): Promise<void>;
   closeAll(): void;
 }
+
+export interface PastedImage {
+  type: ImageType;
+  bytes: Uint8Array;
+}
+
+const IMAGE_EXTENSIONS: Record<ImageType, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 
 export interface AgentServiceDeps {
   store: Store;
@@ -134,17 +146,25 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     reportError: (workspace, agent, text) => records.addError(workspace, agent, text),
     async add(workspace, instruction) {
       const [view, found] = await Promise.all([overview(workspace), store.getWorkspace(workspace)]);
+      if (found?.archivedAt) throw new ConflictError('This workspace is archived. Restore it to carry on.');
       const hasRepos = (found?.repos.length ?? 0) > 0;
       const pick = await pickOneRole({ picker: rolePicker, roles, fallback: firstRole }, { instruction, overview: view, hasRepos });
       return service.start(workspace, pick.role, pick.instruction);
     },
-    async send(workspace, id, text, focus) {
+    async send(workspace, id, text, focus, images = []) {
       const agent = await records.find(workspace, id);
       claims.claim(agent);
       const message = await claims.whilePreparing(id, async () => {
         const block = focus && focusBlock(focus, await artifacts.get(workspace, focus.artifact), await service.namer(workspace));
-        await posts.add(workspace, id, { kind: 'message', text, ...(focus ? { focus } : {}) });
-        return block ? `${block}\n${text}` : text;
+        const saved = await Promise.all(
+          images.map(async ({ type, bytes }) => {
+            const name = `${ids.next()}.${IMAGE_EXTENSIONS[type]}`;
+            return { name, path: await store.saveImage(workspace, name, bytes) };
+          }),
+        );
+        await posts.add(workspace, id, { kind: 'message', text, ...(focus ? { focus } : {}), ...(saved.length > 0 ? { images: saved.map(({ name }) => name) } : {}) });
+        const attached = saved.length > 0 ? `\n\n<drums-images>\nThe user pasted ${saved.length === 1 ? 'an image' : `${saved.length} images`} with this message. Look at ${saved.length === 1 ? 'it' : 'them'} with Read:\n${saved.map(({ path }) => `- ${path}`).join('\n')}\n</drums-images>` : '';
+        return `${block ? `${block}\n` : ''}${text}${attached}`;
       });
       await sessions.deliver(workspace, id, message);
     },
@@ -156,6 +176,20 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     },
     deliver: sessions.deliver,
     stop: sessions.stop,
+    async close(workspace, id) {
+      await records.find(workspace, id);
+      sessions.close(id);
+      await permissions.expireAll(workspace, id);
+      await records.patch(workspace, id, { closed: true, status: 'idle' });
+      events.emit({ type: 'agent.closed', workspace, agent: id });
+    },
+    async pause(workspace) {
+      for (const agent of (await store.getWorkspace(workspace))?.agents ?? []) {
+        sessions.close(agent.id);
+        const expired = await permissions.expireAll(workspace, agent.id);
+        if (agent.status === 'running' || expired > 0) await records.setStatus(workspace, agent.id, 'idle');
+      }
+    },
     async requestInput(workspace, id, reason) {
       sessions.wantsInput(id);
       await posts.add(workspace, id, { kind: 'note', title: 'Needs input', message: reason });

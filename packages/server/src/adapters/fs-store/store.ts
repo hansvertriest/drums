@@ -1,4 +1,5 @@
-import { readdir, mkdir } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { createTurns, type Store } from '@drums/core';
 import { AnswerSet, Post, Step, Workspace, WorkspaceId } from '@drums/protocol';
 import { createArtifactStore } from './artifacts.js';
@@ -50,6 +51,18 @@ export function createFsStore(workspacesRoot: string): Store {
     listSteps: (workspace) => steps(workspace).list(),
 
     ...createArtifactStore(paths),
+
+    async saveImage(workspace, name, bytes) {
+      const path = paths.image(workspace, name);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, bytes, { flag: 'wx' });
+      return path;
+    },
+    readImage: (workspace, name) =>
+      readFile(paths.image(workspace, name)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return undefined;
+        throw error;
+      }),
 
     getAnswers: (workspace, artifact, version) => readJson(paths.answers(workspace, artifact, version), AnswerSet),
     saveAnswers: (workspace, set) => writeAtomic(paths.answers(workspace, set.artifact, set.version), toJson(set)),

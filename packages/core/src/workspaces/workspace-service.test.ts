@@ -31,6 +31,17 @@ describe('WorkspaceService', () => {
     expect(posts).toMatchObject([{ kind: 'message', text: 'Scope checkout' }]);
   });
 
+  it('keeps the title the picker made, for the list and the PR, and goes without one if it made none', async () => {
+    const { services, picker } = createHarness();
+    picker.title = '  Checkout scope ';
+    const titled = await services.workspaces.create({ goal: 'Scope checkout, with all the details' });
+    expect(titled.workspace.title).toBe('Checkout scope');
+    picker.title = undefined;
+    const plain = await services.workspaces.create({ goal: 'Other' });
+    expect(plain.workspace.title).toBeUndefined();
+    expect(await services.workspaces.list()).toMatchObject([{ title: 'Checkout scope' }, { goal: 'Other' }]);
+  });
+
   it('lists workspaces with their status and the role that posted last', async () => {
     const { services, backend } = createHarness();
     const { workspace } = await services.workspaces.create({ goal: 'Goal' });
@@ -138,5 +149,28 @@ describe('picking roles for a new workspace', () => {
     expect((await services.workspaces.list())[0]?.lastPost).toBeUndefined();
     await backend.last().tool('post', { title: 't', message: 'm' });
     expect((await services.workspaces.list())[0]?.lastPost).toBe(2);
+  });
+});
+
+describe('archiving', () => {
+  it('stops the agents, marks it in the list, refuses messages until restored, and resumes them after', async () => {
+    const { services, backend, store } = createHarness();
+    const { workspace } = await services.workspaces.create({ goal: 'Goal' });
+    const agent = workspace.agents[0]!.id;
+    backend.last().emit({ type: 'session', sessionId: 's-1' });
+    await settle();
+
+    await services.workspaces.archive(workspace.id);
+    await settle();
+    expect((await store.getWorkspace(workspace.id))!.agents[0]!.status).toBe('idle');
+    expect(await services.workspaces.list()).toMatchObject([{ id: workspace.id, archived: true }]);
+    await expect(services.agents.send(workspace.id, agent, 'more')).rejects.toThrow('archived');
+    await expect(services.agents.add(workspace.id, 'more')).rejects.toThrow('archived');
+
+    await services.workspaces.restore(workspace.id);
+    expect((await services.workspaces.list())[0]!.archived).toBeUndefined();
+    await services.agents.send(workspace.id, agent, 'more');
+    expect(backend.last().resumedFrom).toBe('s-1');
+    expect(backend.last().received).toEqual(['more']);
   });
 });

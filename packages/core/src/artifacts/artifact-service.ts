@@ -54,6 +54,7 @@ export interface ArtifactService {
    * latest. Don't call `create` or `update` inside it: they take the same turn.
    */
   exclusive<T>(workspace: WorkspaceId, work: () => Promise<T>): Promise<T>;
+  setArchived(workspace: WorkspaceId, id: ArtifactId, archived: boolean): Promise<Artifact>;
 }
 
 /** A version's thread entry, without what the post service adds. */
@@ -73,11 +74,20 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
   const { store, events, clock, kinds, posts } = deps;
   const exclusive = createTurns();
 
-  const view = async (workspace: WorkspaceId, meta: ArtifactMeta): Promise<Artifact> => ({
+  const archivedIn = async (workspace: WorkspaceId) => (await store.getWorkspace(workspace))?.archivedArtifacts ?? [];
+
+  const view = async (workspace: WorkspaceId, meta: ArtifactMeta, archived?: readonly ArtifactId[]): Promise<Artifact> => ({
     ...meta,
     renderer: kinds.get(meta.kind).renderer,
     versions: await store.listVersions(workspace, meta.id),
+    ...((archived ?? (await archivedIn(workspace))).includes(meta.id) ? { archived: true } : {}),
   });
+
+  const writeArchived = (workspace: WorkspaceId, id: ArtifactId, archived: boolean) =>
+    store.updateWorkspace(workspace, (w) => ({
+      ...w,
+      archivedArtifacts: [...(w.archivedArtifacts ?? []).filter((other) => other !== id), ...(archived ? [id] : [])],
+    }));
 
   const metaOf = async (workspace: WorkspaceId, id: ArtifactId) => {
     const meta = await store.getArtifact(workspace, id);
@@ -105,6 +115,7 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
   ) => {
     const version: ArtifactVersion = { version: number, by: agent, note, at: clock.now().toISOString() };
     if (!(await store.addVersion(workspace, meta.id, version, content))) return false;
+    if ((await archivedIn(workspace)).includes(meta.id)) await writeArchived(workspace, meta.id, false);
     if (number > 1) await deps.onNewVersion?.(workspace, meta.id, number - 1, number);
     await posts.add(workspace, agent, post);
     events.emit({ type: 'artifact.version', workspace, artifact: await view(workspace, meta), version: number });
@@ -113,8 +124,8 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
 
   return {
     async list(workspace) {
-      const metas = await store.listArtifacts(workspace);
-      const views = await Promise.all(metas.map((meta) => view(workspace, meta)));
+      const [metas, archived] = await Promise.all([store.listArtifacts(workspace), archivedIn(workspace)]);
+      const views = await Promise.all(metas.map((meta) => view(workspace, meta, archived)));
       // One being created right now has no version yet, and nothing to show.
       return views.filter((artifact) => artifact.versions.length > 0 || kinds.get(artifact.kind).showsWithoutVersions);
     },
@@ -153,5 +164,11 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
       });
     },
     exclusive,
+    async setArchived(workspace, id, archived) {
+      const meta = await metaOf(workspace, id);
+      const artifact = await view(workspace, meta, (await writeArchived(workspace, id, archived)).archivedArtifacts);
+      events.emit({ type: 'artifact.archived', workspace, artifact });
+      return artifact;
+    },
   };
 }

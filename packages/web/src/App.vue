@@ -33,7 +33,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
     <AppHeader />
     <WorkspaceStrip />
     <PhoneTabs v-if="workspaces.current" />
-    <div class="body" :class="{ 'no-chat': !workspaces.current, collapsed: ui.railCollapsed }" :data-tab="ui.phoneTab">
+    <div class="body" :class="{ 'no-chat': !workspaces.current, collapsed: ui.railCollapsed }" :style="{ '--rail-width': `${ui.railWidth}px` }" :data-tab="ui.phoneTab">
       <ChatRail v-if="workspaces.current" />
       <ArtifactStage />
     </div>
@@ -58,7 +58,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
   margin-left: 60px;
 }
 .body.no-chat,

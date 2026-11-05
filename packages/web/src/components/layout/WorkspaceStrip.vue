@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { WorkspaceSummary } from '@drums/protocol';
+import { computed, ref } from 'vue';
 import { useNews } from '../../stores/news';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
@@ -7,9 +8,12 @@ import { useWorkspaces } from '../../stores/workspaces';
 const workspaces = useWorkspaces();
 const ui = useUi();
 const news = useNews();
+const showArchived = ref(false);
+const active = computed(() => workspaces.workspaces.filter((workspace) => !workspace.archived));
+const archived = computed(() => workspaces.workspaces.filter((workspace) => workspace.archived));
 
-const initials = ({ goal }: WorkspaceSummary) =>
-  goal
+const initials = ({ title, goal }: WorkspaceSummary) =>
+  (title ?? goal)
     .split(/\s+/)
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? '')
@@ -26,18 +30,21 @@ const open = (id: string) => {
   <aside class="strip" :class="{ open: ui.drawerOpen }" aria-label="Workspaces">
     <div class="list">
       <button
-        v-for="workspace in workspaces.workspaces"
+        v-for="workspace in showArchived ? [...active, ...archived] : active"
         :key="workspace.id"
         type="button"
         class="item"
-        :class="{ on: workspace.id === workspaces.currentId }"
+        :class="{ on: workspace.id === workspaces.currentId, archived: workspace.archived }"
         @click="open(workspace.id)"
       >
         <span class="icon">{{ initials(workspace) }}<i :class="`st-${workspace.status}`" /><b v-if="workspace.id !== workspaces.currentId && news.hasNews(workspace)" class="news" title="New since you looked" /></span>
         <span class="text">
-          <span class="goal">{{ workspace.goal }}</span>
+          <span class="goal" :title="workspace.goal">{{ workspace.title ?? workspace.goal }}</span>
           <span class="meta">{{ workspace.status }}<template v-if="workspace.lastRole"> · {{ workspace.lastRole }}</template><template v-if="workspace.additions !== undefined"> · +{{ workspace.additions }} −{{ workspace.deletions }}</template></span>
         </span>
+      </button>
+      <button v-if="archived.length > 0" type="button" class="toggle" :aria-expanded="showArchived" @click="showArchived = !showArchived">
+        {{ showArchived ? 'Hide archived' : `Archived (${archived.length})` }}
       </button>
     </div>
     <button class="new" type="button" @click="(ui.newWorkspaceOpen = true), (ui.drawerOpen = false)">
@@ -120,6 +127,25 @@ const open = (id: string) => {
   border-radius: 10px;
   background: none;
   text-align: left;
+}
+.item.archived {
+  opacity: 0.6;
+}
+.toggle {
+  flex: none;
+  width: 280px;
+  margin-top: 4px;
+  padding: 6px 4px 6px 50px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+}
+.toggle:hover {
+  background: var(--surface-2);
 }
 .item:hover {
   background: var(--surface-2);

@@ -10,7 +10,7 @@ import { createTempRepo, runGit, tempDirs, writeFile } from './testing/temp-repo
 
 /** A code workspace through the real HTTP layer, real git and real dyffle. The model and `gh` are fake, and origin is a local bare repo. */
 const dirs = tempDirs();
-const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => (hasRepos ? [{ role: 'coder', instruction: goal }] : []) };
+const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => ({ picks: hasRepos ? [{ role: 'coder', instruction: goal }] : [] }) };
 const fake = fakeBackend();
 const PATH = process.env.PATH;
 const LISTED_NAME = 'box.example';

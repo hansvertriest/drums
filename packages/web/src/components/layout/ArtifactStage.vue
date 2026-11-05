@@ -78,6 +78,7 @@ const onAnswers = (next: Answer[]) => {
           :changes="ui.showChanges"
           @answers="onAnswers"
         />
+        <p v-else-if="!artifacts.current" class="empty">Every artifact is archived.</p>
       </div>
     </template>
   </main>

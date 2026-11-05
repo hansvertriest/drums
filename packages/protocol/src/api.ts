@@ -47,11 +47,17 @@ export type WorkspaceState = z.infer<typeof WorkspaceState>;
 export const AddAgentRequest = z.object({ instruction: z.string().trim().min(1).max(20_000) });
 export type AddAgentRequest = z.infer<typeof AddAgentRequest>;
 
-/** `POST /api/workspaces/:ws/agents/:a/messages` */
-export const SendMessageRequest = z.object({
-  text: z.string().trim().min(1).max(100_000),
-  focus: Focus.optional(),
-});
+export const ImageType = z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+export type ImageType = z.infer<typeof ImageType>;
+
+/** `POST /api/workspaces/:ws/agents/:a/messages`. Images as base64, up to about 10 MB each. */
+export const SendMessageRequest = z
+  .object({
+    text: z.string().trim().max(100_000),
+    focus: Focus.optional(),
+    images: z.array(z.object({ type: ImageType, data: z.base64().max(14_000_000) })).max(8).default([]),
+  })
+  .refine((request) => request.text.length > 0 || request.images.length > 0, 'Write a message or add an image.');
 export type SendMessageRequest = z.infer<typeof SendMessageRequest>;
 
 /** `GET /api/workspaces/:ws/artifacts/:id/versions/:v` */

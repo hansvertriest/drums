@@ -33,8 +33,8 @@ export function createClaudeRolePicker({ model, apiKey, timeoutMs = DEFAULT_TIME
       });
       try {
         // A race as well as the abort: nothing a call does can keep the caller waiting past the limit.
-        const picks = parsePicks(await Promise.race([call(pickCall(request), aborted.signal), late]));
-        return request.exactlyOne ? picks.slice(0, 1) : picks;
+        const answer = parsePicks(await Promise.race([call(pickCall(request), aborted.signal), late]));
+        return request.exactlyOne ? { picks: answer.picks.slice(0, 1) } : answer;
       } catch (error) {
         console.error(`drums: picking roles failed: ${error instanceof Error ? error.message : String(error)}`);
         throw error;

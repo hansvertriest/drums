@@ -4,8 +4,8 @@ import { toMcpTools } from '../../mcp/sdk-tools.js';
 import { qualifiedToolName, SERVER_NAME } from './messages.js';
 import { boundReads, READ_TOOLS } from './read-bounds.js';
 
-/** What `shell-and-files` means in the SDK's terms. No web, no subagents, no other built-in. */
-const SHELL_AND_FILE_TOOLS = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'];
+/** Built-ins that wait on a person at the terminal. In drums, request_input does that. */
+const TERMINAL_ONLY_TOOLS = ['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode'];
 
 /**
  * A second lock behind the options below: anything else that ever reaches the permission
@@ -48,20 +48,22 @@ const BY_ACCESS: Record<SystemAccess, (allowed: string[], choices: PermissionCho
     permissionPrompts: 'none',
     hooks: { PreToolUse: [{ hooks: [denyOtherTools([...allowed, ...READ_TOOLS]), boundReads(cwd)] }] },
   }),
-  // A shell and file tools. `auto` has a classifier approve or deny each call, and what it can't decide
-  // comes to `canUseTool`. An account or model without `auto` starts in `default` instead, where everything
-  // that needs approval comes to `canUseTool`. Never a bypass mode: the working directory bounds nothing.
-  'shell-and-files': (allowed, { canUseTool, classifier }) => ({
-    tools: SHELL_AND_FILE_TOOLS,
+  // Everything the user's own Claude Code has: every built-in, their MCP servers, skills, plugins, hooks and
+  // CLAUDE.md. `auto` has a classifier approve or deny each call, and what it can't decide comes to `canUseTool`.
+  // An account or model without `auto` starts in `default` instead, where everything that needs approval comes
+  // to `canUseTool`. Never a bypass mode: the working directory bounds nothing.
+  'shell-and-files': (_allowed, { canUseTool, classifier }) => ({
+    disallowedTools: TERMINAL_ONLY_TOOLS,
+    settingSources: ['user', 'project', 'local'],
+    strictMcpConfig: false,
     permissionMode: classifier ? 'auto' : 'default',
     ...(canUseTool ? { canUseTool } : {}),
-    hooks: { PreToolUse: [{ hooks: [denyOtherTools([...allowed, ...SHELL_AND_FILE_TOOLS])] }] },
   }),
 };
 
 /**
- * What every session shares: `strictMcpConfig` and `settingSources: []` keep out the user's MCP
- * servers, plugins, hooks and rules, and `allowedTools` approves drums' tools by their full names.
+ * What every session starts from: `strictMcpConfig` and `settingSources: []` keep out the user's MCP
+ * servers, plugins, hooks and rules unless its access lets them in, and `allowedTools` approves drums' tools by their full names.
  * Authentication is not touched: the CLI uses whatever login the machine already has.
  */
 export function sessionOptions(session: AgentSessionOptions, model: string, choices: PermissionChoices): Options {

@@ -34,8 +34,9 @@ export interface BoundTool {
  * What a session can touch besides its tools.
  * - `tools-only`: exactly `tools`, and everything else is denied.
  * - `read-files`: also reading and searching the workspace folder, and nothing outside it. Never asks.
- * - `shell-and-files`: also a shell and file tools. The backend decides what it approves by
- *   itself, and sends the rest as `permission.requested`. The folder is not a security boundary.
+ * - `shell-and-files`: everything the user's own agent setup has: shell, files, web, MCP servers, skills and
+ *   plugins. The backend decides what it approves by itself, and sends the rest as `permission.requested`.
+ *   The folder is not a security boundary.
  */
 export type SystemAccess = 'tools-only' | 'read-files' | 'shell-and-files';
 

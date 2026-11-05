@@ -24,7 +24,7 @@ const ui = useUi();
 
 const subline = computed(() => {
   if (!workspaces.current) return 'No workspace';
-  const count = agents.agents.length;
+  const count = agents.open.length;
   const agentCount = `${count} agent${count === 1 ? '' : 's'}`;
   return map.branch ? `${agentCount} · ${map.branch} · ${map.repos.map((repo) => repo.name).join(', ')}` : agentCount;
 });
@@ -34,6 +34,12 @@ const statusLabel = computed(() => {
   return single ? `PR #${single} open` : status.value && STATUS_LABEL[status.value];
 });
 const pendingCount = computed(() => answers.pendingCount + map.pendingComments);
+
+const archive = () => {
+  const archived = !workspaces.current?.archived;
+  if (archived && !window.confirm('Archive this workspace? Its agents stop. Worktrees, branches and everything posted stay, and you can restore it.')) return;
+  void workspaces.setArchived(archived).catch(ui.report);
+};
 </script>
 
 <template>
@@ -45,7 +51,7 @@ const pendingCount = computed(() => answers.pendingCount + map.pendingComments);
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" /></svg>
     </button>
     <div class="title">
-      <h1>{{ workspaces.current?.goal ?? 'drums' }}</h1>
+      <h1 :title="workspaces.current?.goal">{{ workspaces.current?.title ?? workspaces.current?.goal ?? 'drums' }}</h1>
       <p>{{ subline }}</p>
     </div>
     <span v-if="status" class="pill" :class="`st-${status}`"><i />{{ statusLabel }}</span>
@@ -68,6 +74,7 @@ const pendingCount = computed(() => answers.pendingCount + map.pendingComments);
       </button>
       <SendPopover v-if="ui.sendOpen" />
     </div>
+    <button v-if="workspaces.current" class="send" type="button" @click="archive">{{ workspaces.current.archived ? 'Restore' : 'Archive' }}</button>
     <OpenPrs v-if="ui.openPrsOpen" />
   </header>
 </template>

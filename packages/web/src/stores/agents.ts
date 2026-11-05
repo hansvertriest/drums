@@ -3,13 +3,15 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
 export const useAgents = defineStore('agents', () => {
+  /** Closed ones too, so their posts still name them. */
   const agents = ref<Agent[]>([]);
+  const open = computed(() => agents.value.filter((agent) => !agent.closed));
   const currentId = ref<AgentId>();
-  const current = computed(() => agents.value.find((agent) => agent.id === currentId.value) ?? agents.value[0]);
+  const current = computed(() => open.value.find((agent) => agent.id === currentId.value) ?? open.value[0]);
 
   const load = (next: Agent[]) => {
     agents.value = next;
-    if (!next.some((agent) => agent.id === currentId.value)) currentId.value = next[0]?.id;
+    if (!open.value.some((agent) => agent.id === currentId.value)) currentId.value = open.value[0]?.id;
   };
   /** From the request or from the stream, whichever comes first. */
   const add = (agent: Agent) => {
@@ -19,7 +21,12 @@ export const useAgents = defineStore('agents', () => {
     const agent = agents.value.find((a) => a.id === id);
     if (agent) agent.status = status;
   };
+  const close = (id: AgentId) => {
+    const agent = agents.value.find((a) => a.id === id);
+    if (agent) agent.closed = true;
+    if (currentId.value === id) currentId.value = open.value[0]?.id;
+  };
   const nameOf = (id: AgentId) => agents.value.find((agent) => agent.id === id)?.name ?? '';
 
-  return { agents, currentId, current, load, add, setStatus, nameOf };
+  return { agents, open, currentId, current, load, add, setStatus, close, nameOf };
 });

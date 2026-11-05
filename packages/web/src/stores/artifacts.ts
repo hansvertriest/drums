@@ -12,6 +12,7 @@ export const useArtifacts = defineStore('artifacts', () => {
   /** Versions are immutable, so what has been loaded stays good. */
   const contents = ref<Record<string, VersionResponse>>({});
 
+  const shown = computed(() => artifacts.value.filter((artifact) => !artifact.archived));
   const current = computed(() => artifacts.value.find((artifact) => artifact.id === currentId.value));
   const latest = computed(() => current.value?.versions.at(-1)?.version);
   const viewing = computed(() => {
@@ -36,7 +37,18 @@ export const useArtifacts = defineStore('artifacts', () => {
 
   const load = (next: Artifact[]) => {
     artifacts.value = next;
-    if (!next.some((artifact) => artifact.id === currentId.value)) currentId.value = next[0]?.id;
+    if (!shown.value.some((artifact) => artifact.id === currentId.value)) currentId.value = shown.value[0]?.id;
+  };
+
+  const replace = (artifact: Artifact) => {
+    const index = artifacts.value.findIndex((a) => a.id === artifact.id);
+    if (index < 0) return;
+    const next = [...artifacts.value];
+    next[index] = artifact;
+    if (artifact.archived && artifact.id === currentId.value) {
+      currentId.value = next.slice(index + 1).find((a) => !a.archived)?.id ?? next.slice(0, index).filter((a) => !a.archived).at(-1)?.id;
+    }
+    artifacts.value = next;
   };
 
   const reset = () => {
@@ -65,5 +77,5 @@ export const useArtifacts = defineStore('artifacts', () => {
     contents.value[versionKey(id, response.version.version)] = response;
   };
 
-  return { artifacts, currentId, current, latest, viewing, isLatest, content, open, load, reset, addVersion, titleOf, setContent };
+  return { artifacts, shown, currentId, current, latest, viewing, isLatest, content, open, load, replace, reset, addVersion, titleOf, setContent };
 });

@@ -3,6 +3,7 @@ import type {
   ArtifactId,
   ArtifactMeta,
   ArtifactVersion,
+  ImageName,
   Post,
   PostDraft,
   Step,
@@ -39,6 +40,10 @@ export interface Store {
   /** Oldest first. */
   listVersions(workspace: WorkspaceId, artifact: ArtifactId): Promise<ArtifactVersion[]>;
   readVersion(workspace: WorkspaceId, artifact: ArtifactId, version: VersionNumber): Promise<string | undefined>;
+
+  /** Where the image is, for an agent to read. */
+  saveImage(workspace: WorkspaceId, name: ImageName, bytes: Uint8Array): Promise<string>;
+  readImage(workspace: WorkspaceId, name: ImageName): Promise<Uint8Array | undefined>;
 
   getAnswers(workspace: WorkspaceId, artifact: ArtifactId, version: VersionNumber): Promise<AnswerSet | undefined>;
   saveAnswers(workspace: WorkspaceId, set: AnswerSet): Promise<void>;

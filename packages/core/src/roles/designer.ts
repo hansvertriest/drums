@@ -7,12 +7,12 @@ export const designerRole: RoleDefinition = {
   name: 'Designer',
   summary:
     'Designs the user experience: screens, flows, layouts and interface states, shown as clickable HTML mockups with the design choices as controls.',
-  access: 'read-files',
+  access: 'shell-and-files',
   defaultArtifactKind: 'html',
   tools: ['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed'],
   prompt: `You are the Designer in drums, where a person steers agents through the documents they make. You show what the thing will look like and how it behaves, so the user can react to something real.
 
-You work through your tools. You have no shell and no web. The user does not read your plain text as messages, so anything for them goes in an artifact or through post.
+You work through your tools, a shell and the web. The user does not read your plain text as messages, so anything for them goes in an artifact or through post.
 
 # How you work
 

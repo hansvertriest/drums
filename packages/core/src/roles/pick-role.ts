@@ -26,12 +26,16 @@ function usablePicks(picks: readonly RolePick[], candidates: readonly RoleCandid
   });
 }
 
-/** New workspace: the roles a goal needs, from the same call that Add agent uses. */
-export async function pickRoles({ picker, roles, fallback }: PickRoleDeps, { goal, hasRepos }: { goal: string; hasRepos: boolean }): Promise<RolePick[]> {
+/** New workspace: the roles a goal needs and a title for it, from the same call that Add agent uses. */
+export async function pickRoles(
+  { picker, roles, fallback }: PickRoleDeps,
+  { goal, hasRepos }: { goal: string; hasRepos: boolean },
+): Promise<{ picks: RolePick[]; title?: string }> {
   const candidates = candidatesFor(roles, hasRepos);
-  const picks = await picker.pick({ goal, candidates, hasRepos }).catch((): RolePick[] => []);
-  const usable = usablePicks(picks, candidates, goal);
-  return usable.length > 0 ? usable : [{ role: fallback, instruction: goal }];
+  const answer = await picker.pick({ goal, candidates, hasRepos }).catch(() => ({ picks: [], title: undefined }));
+  const usable = usablePicks(answer.picks, candidates, goal);
+  const title = answer.title?.trim();
+  return { picks: usable.length > 0 ? usable : [{ role: fallback, instruction: goal }], ...(title ? { title } : {}) };
 }
 
 /** Add agent: exactly one role for an instruction, given where the workspace stands. */
@@ -40,6 +44,6 @@ export async function pickOneRole(
   { instruction, overview, hasRepos }: { instruction: string; overview: string; hasRepos: boolean },
 ): Promise<RolePick> {
   const candidates = candidatesFor(roles, hasRepos);
-  const picks = await picker.pick({ goal: instruction, overview, candidates, hasRepos, exactlyOne: true }).catch((): RolePick[] => []);
+  const { picks } = await picker.pick({ goal: instruction, overview, candidates, hasRepos, exactlyOne: true }).catch(() => ({ picks: [] }));
   return usablePicks(picks, candidates, instruction)[0] ?? { role: fallback, instruction };
 }

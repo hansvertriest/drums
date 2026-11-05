@@ -11,5 +11,7 @@ export const Agent = z.object({
   status: AgentStatus,
   /** Stored so the agent can resume; absent until the backend reports one. */
   sessionId: z.string().min(1).optional(),
+  /** Closed by the user: no tab and no session, but kept so its posts still name it. */
+  closed: z.boolean().optional(),
 });
 export type Agent = z.infer<typeof Agent>;

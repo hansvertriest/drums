@@ -109,10 +109,8 @@ describe('boundReads', () => {
 describe('session options by access', () => {
   const session = (access: AgentSessionOptions['access']): AgentSessionOptions => ({ cwd, prompt: 'p', tools: [], access });
 
-  it.each(['scoper', 'researcher', 'designer', 'reviewer'])('%s gets exactly the read tools, and no way to a row', async (id) => {
-    const role = roles.find((entry) => entry.id === id)!;
-    expect(role.access).toBe('read-files');
-    const options = sessionOptions(session(role.access!), 'm', { classifier: true, canUseTool: async () => ({ behavior: 'deny', message: 'no' }) });
+  it('read-files gets exactly the read tools, and no way to a row', async () => {
+    const options = sessionOptions(session('read-files'), 'm', { classifier: true, canUseTool: async () => ({ behavior: 'deny', message: 'no' }) });
     expect(options.tools).toEqual(['Read', 'Glob', 'Grep']);
     expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep']);
     expect(options.permissionMode).toBe('dontAsk');
@@ -128,16 +126,18 @@ describe('session options by access', () => {
     }
   });
 
-  it('leaves the Coder as it was', () => {
+  it.each(roles.map((role) => role.id))('%s runs in auto mode with everything the user\'s Claude Code has', (id) => {
     const canUseTool = async () => ({ behavior: 'deny', message: 'no' }) as const;
-    const coder = roles.find((entry) => entry.id === 'coder')!;
-    expect(coder.access).toBe('shell-and-files');
-    const options = sessionOptions(session(coder.access!), 'm', { classifier: true, canUseTool });
-    expect(options.tools).toEqual(['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep']);
+    const role = roles.find((entry) => entry.id === id)!;
+    expect(role.access).toBe('shell-and-files');
+    const options = sessionOptions(session(role.access!), 'm', { classifier: true, canUseTool });
+    expect(options.tools).toBeUndefined();
+    expect(options.settingSources).toEqual(['user', 'project', 'local']);
+    expect(options.strictMcpConfig).toBe(false);
     expect(options.allowedTools).toEqual([]);
     expect(options.permissionMode).toBe('auto');
     expect(options.permissionPrompts).toBeUndefined();
     expect(options.canUseTool).toBe(canUseTool);
-    expect(options.hooks!.PreToolUse![0]!.hooks).toHaveLength(1);
+    expect(options.hooks).toBeUndefined();
   });
 });

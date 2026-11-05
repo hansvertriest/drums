@@ -96,6 +96,20 @@ describe('messages', () => {
     expect((await services.posts.list(ws)).at(-1)).toMatchObject({ kind: 'message', text: 'smaller please' });
   });
 
+  it('keeps pasted images in the workspace, shows them in the thread and tells the agent where to read them', async () => {
+    const { session, services, ws, agent } = await setup();
+    session.emit({ type: 'turn.ended', outcome: 'success' });
+    await settle();
+    await services.agents.send(ws, agent, '', undefined, [{ type: 'image/png', bytes: new Uint8Array([1, 2]) }]);
+    const post = (await services.posts.list(ws)).at(-1);
+    expect(post).toMatchObject({ kind: 'message', text: '', images: [expect.stringMatching(/\.png$/)] });
+    const name = post?.kind === 'message' ? post.images![0]! : '';
+    expect(session.received.at(-1)).toContain('<drums-images>');
+    expect(session.received.at(-1)).toContain(`/workspaces/${ws}/.drums/images/${name}`);
+    expect(await services.posts.image(ws, name)).toEqual(new Uint8Array([1, 2]));
+    await expect(services.posts.image(ws, 'nope.png')).rejects.toThrow('No image');
+  });
+
   it('refuses a message while the agent runs, without a thread entry', async () => {
     const { services, ws, agent } = await setup();
     const before = (await services.posts.list(ws)).length;
@@ -289,5 +303,27 @@ describe('at the same time', () => {
     const { workspace } = await services.workspaces.state(ws);
     expect(workspace.agents).toHaveLength(4);
     expect(workspace.agents.every((a) => a.status === 'review')).toBe(true);
+  });
+});
+
+describe('closing', () => {
+  it('ends the session mid-turn, keeps the agent for its name and refuses it from then on', async () => {
+    const { services, session, status, ws, agent, seen } = await setup();
+    await session.tool('post', { title: 't', message: 'm' });
+    await services.agents.close(ws, agent);
+    await settle();
+    expect(await status()).toMatchObject({ closed: true, status: 'idle', name: 'Scoper' });
+    expect(seen).toContainEqual({ type: 'agent.closed', workspace: ws, agent });
+    expect((await services.posts.list(ws)).some((post) => post.kind === 'note')).toBe(true);
+    await expect(services.agents.send(ws, agent, 'again')).rejects.toThrow('Scoper is closed.');
+    expect(session.received).toHaveLength(1);
+  });
+
+  it('leaves closed agents out of the overview the others get', async () => {
+    const { services, picker, ws, agent, backend } = await setup();
+    await services.agents.close(ws, agent);
+    picker.answer = async () => [{ role: 'designer', instruction: 'Draw' }];
+    await services.agents.add(ws, 'Draw');
+    expect(backend.last().received[0]).not.toContain('Scoper (scoper)');
   });
 });

@@ -5,7 +5,7 @@ export const uncheckpointedChanges: TurnCheck = {
   id: 'uncheckpointed-changes',
   nudge: 'You changed files and have posted no checkpoint since. Call checkpoint now.',
   detect: async ({ workspace, role }, { code }) =>
-    role.access === 'shell-and-files' && workspace.repos.length > 0 && code.uncheckpointed(workspace.id),
+    role.tools.includes('checkpoint') && workspace.repos.length > 0 && code.uncheckpointed(workspace.id),
   async whenIgnored({ workspace, agent }, { code }) {
     await code.checkpoint(workspace.id, agent.id, {
       title: 'Uncheckpointed changes',

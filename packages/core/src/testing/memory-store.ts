@@ -9,6 +9,7 @@ export function createMemoryStore(): Store {
   const artifacts = new Map<string, ArtifactMeta[]>();
   const versions = new Map<string, Array<{ meta: ArtifactVersion; content: string }>>();
   const answers = new Map<string, AnswerSet>();
+  const images = new Map<string, Uint8Array>();
   const key = (...parts: Array<string | number>) => parts.join('/');
   const clone = <T>(value: T): T => structuredClone(value);
 
@@ -24,6 +25,11 @@ export function createMemoryStore(): Store {
       return clone(next);
     },
     workspacePath: (id) => `/workspaces/${id}`,
+    async saveImage(workspace, name, bytes) {
+      images.set(key(workspace, name), bytes);
+      return `/workspaces/${workspace}/.drums/images/${name}`;
+    },
+    readImage: async (workspace, name) => images.get(key(workspace, name)),
     async appendPost(workspace, draft) {
       const list = posts.get(workspace) ?? [];
       const post = { ...draft, seq: list.length + 1 } as Post;

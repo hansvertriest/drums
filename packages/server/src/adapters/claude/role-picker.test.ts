@@ -14,7 +14,7 @@ const request: RolePickRequest = {
   ],
 };
 
-const answer = { picks: [{ role: 'scoper', instruction: 'Scope it' }] };
+const answer = { picks: [{ role: 'scoper', instruction: 'Scope it' }], title: 'Loyalty scope' };
 
 const message = (text: string, stop_reason = 'end_turn') => ({ stop_reason, content: [{ type: 'text', text }] }) as unknown as Anthropic.Message;
 
@@ -39,12 +39,14 @@ const withLogin = (messages: unknown[], onCall?: (options: Options) => void) => 
 describe('on the Anthropic API, with a key', () => {
   it('asks with structured output, the configured model and the candidates, and reads the answer', async () => {
     const { picker, createMessage } = withApi(async () => message(JSON.stringify(answer)));
-    expect(await picker.pick(request)).toEqual(answer.picks);
+    expect(await picker.pick(request)).toEqual(answer);
     const params = createMessage.mock.calls[0]![0];
     expect(params.model).toBe('configured-model');
     expect(params.output_config?.format).toMatchObject({ type: 'json_schema' });
     const schema = JSON.stringify(params.output_config?.format?.schema);
     expect(schema).toContain('["scoper","designer"]');
+    expect(params.output_config?.format?.schema).toMatchObject({ required: ['picks', 'title'] });
+    expect(params.system).toContain('title: two to six words');
     expect(params.system).toContain('no role can change code');
     const user = JSON.stringify(params.messages);
     expect(user).toContain('Scopes things.');
@@ -55,9 +57,11 @@ describe('on the Anthropic API, with a key', () => {
     const { picker, createMessage } = withApi(async () =>
       message(JSON.stringify({ picks: [...answer.picks, { role: 'designer', instruction: 'Also' }] })),
     );
-    const picks = await picker.pick({ ...request, exactlyOne: true, overview: '<drums-workspace>x</drums-workspace>', hasRepos: true });
+    const { picks, title } = await picker.pick({ ...request, exactlyOne: true, overview: '<drums-workspace>x</drums-workspace>', hasRepos: true });
     expect(picks).toHaveLength(1);
+    expect(title).toBeUndefined();
     const params = createMessage.mock.calls[0]![0];
+    expect(params.system).not.toContain('title');
     expect(params.system).toContain('exactly one');
     expect(params.system).not.toContain('no role can change code');
     expect(JSON.stringify(params.messages)).toContain('<drums-workspace>x</drums-workspace>');
@@ -68,7 +72,7 @@ describe('on the Anthropic API, with a key', () => {
     ['a refusal', message('', 'refusal')],
     ['a cut-off answer', message('{"picks":[', 'max_tokens')],
   ])('returns nothing for %s', async (_name, reply) => {
-    expect(await withApi(async () => reply).picker.pick(request)).toEqual([]);
+    expect(await withApi(async () => reply).picker.pick(request)).toEqual({ picks: [] });
   });
 
   it('rejects when the call fails or the text is no JSON, for core to fall back on', async () => {
@@ -80,7 +84,7 @@ describe('on the Anthropic API, with a key', () => {
 describe('on the Claude Code login, without a key', () => {
   it('runs one query with no tools and nothing of the user\'s, and reads its structured output', async () => {
     const { picker, calls } = withLogin([{ type: 'system', subtype: 'init' }, { type: 'result', subtype: 'success', is_error: false, structured_output: answer }]);
-    expect(await picker.pick(request)).toEqual(answer.picks);
+    expect(await picker.pick(request)).toEqual(answer);
     const { prompt, options } = calls[0]!;
     expect(prompt).toContain('Scopes things.');
     expect(options).toMatchObject({ model: 'configured-model', tools: [], allowedTools: [], settingSources: [], strictMcpConfig: true, permissionMode: 'dontAsk', persistSession: false });
@@ -93,7 +97,7 @@ describe('on the Claude Code login, without a key', () => {
     const createMessage = vi.fn();
     const runQuery = () => (async function* () { yield { type: 'result', subtype: 'success', is_error: false, structured_output: answer } as unknown as SDKMessage; })();
     const picker = createClaudeRolePicker({ model: 'm', apiKey: '', createMessage, runQuery });
-    expect(await picker.pick(request)).toEqual(answer.picks);
+    expect(await picker.pick(request)).toEqual(answer);
     expect(createMessage).not.toHaveBeenCalled();
   });
 
@@ -102,7 +106,7 @@ describe('on the Claude Code login, without a key', () => {
     ['bad output', [{ type: 'result', subtype: 'success', is_error: false, structured_output: { picks: 'scoper' } }]],
     ['no result', []],
   ])('returns nothing for %s', async (_name, messages) => {
-    expect(await withLogin(messages).picker.pick(request)).toEqual([]);
+    expect(await withLogin(messages).picker.pick(request)).toEqual({ picks: [] });
   });
 });
 

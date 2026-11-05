@@ -23,6 +23,8 @@ export const Artifact = ArtifactMeta.extend({
   /** Which frontend renderer shows it; named by the artifact kind. */
   renderer: z.string().min(1),
   versions: z.array(ArtifactVersion),
+  /** Put away by the user: out of the tabs and the overview, until it is restored or gets a new version. */
+  archived: z.boolean().optional(),
 });
 export type Artifact = z.infer<typeof Artifact>;
 

@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import type { Post } from '@drums/protocol';
+import { api } from '../../api/client';
 import { renderMarkdown } from '../../markdown';
 import { useAgents } from '../../stores/agents';
 import { useArtifacts } from '../../stores/artifacts';
 import { useUi } from '../../stores/ui';
+import { useWorkspaces } from '../../stores/workspaces';
 import { shortTime } from '../../time';
 
 defineProps<{ post: Post }>();
 
 const agents = useAgents();
+const workspaces = useWorkspaces();
+const imageUrl = (name: string) => api.imageUrl(workspaces.currentId ?? '', name);
 const artifacts = useArtifacts();
 const ui = useUi();
 
@@ -25,7 +29,12 @@ const show = (artifact: string, version?: number) => {
     <button v-if="post.focus" type="button" class="about" @click="show(post.focus.artifact, post.focus.version)">
       About: {{ artifacts.titleOf(post.focus.artifact) }} · v{{ post.focus.version }}
     </button>
-    <div class="md" v-html="renderMarkdown(post.text)" />
+    <div v-if="post.text" class="md" v-html="renderMarkdown(post.text)" />
+    <div v-if="post.images?.length" class="images">
+      <a v-for="name in post.images" :key="name" :href="imageUrl(name)" target="_blank" rel="noopener">
+        <img :src="imageUrl(name)" alt="Pasted image" loading="lazy" />
+      </a>
+    </div>
   </div>
 
   <div v-else-if="post.kind === 'feedback'" class="user">
@@ -86,6 +95,20 @@ const show = (artifact: string, version?: number) => {
   background: var(--accent-soft);
   overflow-wrap: anywhere;
 }
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.images img {
+  display: block;
+  max-width: 220px;
+  max-height: 160px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--bg);
+}
 .user ul {
   margin: 6px 0 0;
   padding-left: 16px;
@@ -139,26 +162,8 @@ h3 {
   font-weight: 600;
   line-height: 1.35;
 }
-.md {
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-.md :deep(p) {
-  margin: 6px 0 0;
-}
-.user .md :deep(p:first-child) {
-  margin-top: 0;
-}
-.md :deep(ul) {
-  margin: 6px 0 0;
-  padding-left: 18px;
-}
-.md :deep(code) {
-  padding: 0 3px;
-  border-radius: 4px;
-  background: var(--surface-2);
-  font-family: var(--mono);
-  font-size: 0.9em;
+.post .md {
+  margin-top: 6px;
 }
 .sent-code {
   margin: 4px 0 0;

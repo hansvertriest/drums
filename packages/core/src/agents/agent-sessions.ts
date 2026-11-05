@@ -215,6 +215,16 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
       await permissions.settle(workspace, id, decision === 'allow' ? 'allowed' : 'denied');
       await backToWork(workspace, agent);
     },
+    /** Ends the session without a word from it. A stored one resumes with the next message. */
+    close(id: AgentId) {
+      const state = live.get(id);
+      if (state) {
+        state.abandoned = true;
+        state.session.close();
+      }
+      live.delete(id);
+      claims.release(id);
+    },
     closeAll() {
       // What they say while closing changes nothing: `recover` sets things straight at the next start.
       for (const state of live.values()) {

@@ -121,7 +121,7 @@ export function createFeedbackService(deps: FeedbackServiceDeps): FeedbackServic
         const groups = await collect(workspace);
         await collectCode(workspace, groups);
         if (groups.size === 0 && overall) {
-          const fallback = to ?? (await store.getWorkspace(workspace))?.agents[0]?.id;
+          const fallback = to ?? (await store.getWorkspace(workspace))?.agents.find((agent) => !agent.closed)?.id;
           if (fallback) groups.set(fallback, { items: [], code: [] });
         }
         if (groups.size === 0) throw new InvalidError('Nothing to send.');

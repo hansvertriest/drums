@@ -28,7 +28,7 @@ const section = (title: string, lines: string[]) => (lines.length > 0 ? [`  ${ti
 /** Spec §4.2: pointers, not content. Agents fetch the detail with their tools. Everything here was typed by someone else. */
 export function formatOverview({ goal, reader, agents, artifacts, posts, code }: OverviewData): string {
   const nameOf = (id: AgentId) => escapeXml(agents.find((agent) => agent.id === id)?.name ?? id);
-  const others = agents.filter((agent) => agent.id !== reader?.id);
+  const others = agents.filter((agent) => agent.id !== reader?.id && !agent.closed);
   return [
     '<drums-workspace>',
     `  goal: ${escapeXml(clip(goal, GOAL_LENGTH))}`,
@@ -77,7 +77,7 @@ export async function workspaceOverview({ store, artifacts, posts, code }: Overv
     goal: workspace.goal,
     ...(self ? { reader: self } : {}),
     agents: workspace.agents,
-    artifacts: artifactViews,
+    artifacts: artifactViews.filter((artifact) => !artifact.archived),
     posts: feed.posts.slice(-RECENT_POSTS),
     ...(workspace.branch && map ? { code: { branch: workspace.branch, repos: map.repos } } : {}),
   });

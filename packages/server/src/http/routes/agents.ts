@@ -15,6 +15,10 @@ export const agentRoutes: RouteGroup = {
       .post('/:a/stop', async (c) => {
         await services.agents.stop(workspaceParam(c), agentParam(c));
         return c.body(null, 204);
+      })
+      .post('/:a/close', async (c) => {
+        await services.agents.close(workspaceParam(c), agentParam(c));
+        return c.body(null, 204);
       });
   },
 };

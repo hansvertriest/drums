@@ -69,7 +69,7 @@ export function createPrService({ store, events, git, pullRequests, sessions, ag
           ...(pr ? { pr } : {}),
         })),
       );
-      return { title: workspace.goal.split('\n')[0]!.slice(0, 120), ...(workspace.branch ? { branch: workspace.branch } : {}), repos };
+      return { title: workspace.title ?? workspace.goal.split('\n')[0]!.slice(0, 120), ...(workspace.branch ? { branch: workspace.branch } : {}), repos };
     },
     open: (id, { title, repos: wanted }) =>
       inTurn(id, async () => {

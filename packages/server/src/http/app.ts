@@ -8,6 +8,7 @@ import { answerRoutes } from './routes/answers.js';
 import { artifactRoutes } from './routes/artifacts.js';
 import { feedbackRoutes } from './routes/feedback.js';
 import { healthRoutes } from './routes/health.js';
+import { imageRoutes } from './routes/images.js';
 import { mapRoutes } from './routes/map.js';
 import { mapViewerRoutes } from './routes/map-viewer.js';
 import { messageRoutes } from './routes/messages.js';
@@ -25,6 +26,7 @@ const routeGroups: readonly RouteGroup[] = [
   streamRoutes,
   agentRoutes,
   messageRoutes,
+  imageRoutes,
   artifactRoutes,
   answerRoutes,
   feedbackRoutes,

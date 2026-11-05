@@ -1,4 +1,4 @@
-import type { CreateWorkspaceRequest, DomainEvent, WorkspaceId, WorkspaceState, WorkspaceSummary } from '@drums/protocol';
+import type { AgentId, ArtifactId, CreateWorkspaceRequest, DomainEvent, WorkspaceId, WorkspaceState, WorkspaceSummary } from '@drums/protocol';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { api } from '../api/client';
@@ -80,11 +80,13 @@ export const useWorkspaces = defineStore('workspaces', () => {
   const handlers: { [T in DomainEvent['type']]: (event: Extract<DomainEvent, { type: T }>) => void } = {
     'agent.added': (event) => agents.add(event.agent),
     'agent.status': (event) => agents.setStatus(event.agent, event.status),
+    'agent.closed': (event) => agents.close(event.agent),
     'agent.step': (event) => threads.addStep(event.step),
     'post.created': (event) => {
       if (threads.addPost(event.post) && event.post.kind !== 'message' && event.post.kind !== 'feedback') ui.noteAgentPost();
     },
     'artifact.version': (event) => artifacts.addVersion(event.artifact, event.artifact.versions.at(-1)?.by === agents.current?.id),
+    'artifact.archived': (event) => artifacts.replace(event.artifact),
     'answers.changed': (event) => answers.set(event.set),
     'permission.changed': (event) => threads.setPermission(event.request),
     // The frame follows its own session; what happens during a build changes nothing out here.
@@ -123,6 +125,23 @@ export const useWorkspaces = defineStore('workspaces', () => {
     agents.currentId = agent.id;
   };
 
+  const closeAgent = async (id: AgentId) => {
+    if (!currentId.value) return;
+    await api.closeAgent(currentId.value, id);
+    agents.close(id);
+  };
+
+  const setArchived = async (archived: boolean) => {
+    if (!currentId.value) return;
+    await (archived ? api.archive(currentId.value) : api.restore(currentId.value));
+    await refreshList();
+  };
+
+  const setArtifactArchived = async (id: ArtifactId, archived: boolean) => {
+    if (!currentId.value) return;
+    artifacts.replace(await api.setArtifactArchived(currentId.value, id, archived));
+  };
+
   const create = async (request: CreateWorkspaceRequest) => {
     const state = await api.createWorkspace(request);
     await refreshList();
@@ -133,9 +152,9 @@ export const useWorkspaces = defineStore('workspaces', () => {
   const boot = async () => {
     await refreshList();
     const wanted = /^#\/w\/(.+)$/.exec(window.location.hash)?.[1];
-    const first = workspaces.value.find((workspace) => workspace.id === wanted) ?? workspaces.value.at(-1);
+    const first = workspaces.value.find((workspace) => workspace.id === wanted) ?? workspaces.value.filter((workspace) => !workspace.archived).at(-1);
     if (first) await open(first.id);
   };
 
-  return { workspaces, currentId, current, refreshList, open, create, addAgent, boot };
+  return { workspaces, currentId, current, refreshList, open, create, addAgent, closeAgent, setArchived, setArtifactArchived, boot };
 });

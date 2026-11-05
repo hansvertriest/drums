@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PermissionRequest, Post, Step } from '@drums/protocol';
 import { computed, nextTick, ref, watch } from 'vue';
+import { renderMarkdown } from '../../markdown';
 import { useAgents } from '../../stores/agents';
 import { useThreads } from '../../stores/threads';
 import { useUi } from '../../stores/ui';
@@ -17,12 +18,12 @@ type Item =
   | { key: string; at: string; step: Step; post?: undefined; permission?: undefined }
   | { key: string; at: string; permission: PermissionRequest; post?: undefined; step?: undefined };
 
-/** Posts and steps by time. Tool steps only with the toggle on; text and errors the user always needs to see. */
+/** Posts and steps by time. What the agent says and does only with Steps on; errors and permission requests always need the user. */
 const items = computed<Item[]>(() => {
   const agent = agents.current?.id;
   const posts: Item[] = threads.posts.filter((p) => p.agent === agent).map((post) => ({ key: `p${post.seq}`, at: post.at, post }));
   const steps: Item[] = threads.steps
-    .filter((s) => s.agent === agent && (s.kind !== 'tool' || ui.showSteps))
+    .filter((s) => s.agent === agent && (s.kind === 'error' || ui.showSteps))
     .map((step) => ({ key: `s${step.seq}`, at: step.at, step }));
   const permissions: Item[] = threads.permissions
     .filter((request) => request.agent === agent)
@@ -54,7 +55,7 @@ watch(
       <div v-else-if="item.step?.kind === 'tool'" class="tool">
         <span>›</span><span><b>{{ item.step.tool }}</b> {{ item.step.summary }}</span>
       </div>
-      <p v-else-if="item.step?.kind === 'text'" class="text">{{ item.step.text }}</p>
+      <div v-else-if="item.step?.kind === 'text'" class="text md" v-html="renderMarkdown(item.step.text)" />
       <p v-else-if="item.step?.kind === 'error'" class="error" role="alert">{{ item.step.text }}</p>
     </template>
   </div>
@@ -88,10 +89,8 @@ watch(
   color: var(--ink);
 }
 .text {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-  white-space: pre-wrap;
+  padding: 2px 0 2px 11px;
+  border-left: 2px solid var(--line);
   overflow-wrap: anywhere;
 }
 .error {

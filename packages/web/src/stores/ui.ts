@@ -2,14 +2,27 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 const RAIL_KEY = 'drums.rail';
+const RAIL_WIDTH_KEY = 'drums.rail-width';
+export const RAIL_WIDTH = { default: 360, min: 280, max: 900 };
 
-const storedRailCollapsed = () => {
+const stored = (key: string) => {
   try {
-    return localStorage.getItem(RAIL_KEY) === 'collapsed';
+    return localStorage.getItem(key);
   } catch {
-    return false;
+    return null;
   }
 };
+
+const remember = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* It just won't be remembered. */
+  }
+};
+
+const clampRailWidth = (width: number) =>
+  Math.round(Math.min(Math.max(width, RAIL_WIDTH.min), RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, window.innerWidth * 0.7)));
 
 export const useUi = defineStore('ui', () => {
   const showSteps = ref(false);
@@ -22,7 +35,9 @@ export const useUi = defineStore('ui', () => {
   const error = ref<string>();
 
   /** The chat rail is folded into a floating button. Remembered per browser. */
-  const railCollapsed = ref(storedRailCollapsed());
+  const railCollapsed = ref(stored(RAIL_KEY) === 'collapsed');
+  /** Dragged by its edge. Remembered per browser. */
+  const railWidth = ref(clampRailWidth(Number(stored(RAIL_WIDTH_KEY)) || RAIL_WIDTH.default));
   /** An agent posted while it was folded. */
   const railNews = ref(false);
   /** Phones: the workspaces drawer, and which of the two tabs shows. */
@@ -36,16 +51,17 @@ export const useUi = defineStore('ui', () => {
   const toggleRail = () => {
     railCollapsed.value = !railCollapsed.value;
     if (!railCollapsed.value) railNews.value = false;
-    try {
-      localStorage.setItem(RAIL_KEY, railCollapsed.value ? 'collapsed' : 'open');
-    } catch {
-      /* It just won't be remembered. */
-    }
+    remember(RAIL_KEY, railCollapsed.value ? 'collapsed' : 'open');
+  };
+
+  const setRailWidth = (width: number) => {
+    railWidth.value = clampRailWidth(width);
+    remember(RAIL_WIDTH_KEY, String(railWidth.value));
   };
 
   const noteAgentPost = () => {
     if (railCollapsed.value) railNews.value = true;
   };
 
-  return { showSteps, showChanges, newWorkspaceOpen, addAgentOpen, sendOpen, openPrsOpen, error, railCollapsed, railNews, drawerOpen, phoneTab, report, toggleRail, noteAgentPost };
+  return { showSteps, showChanges, newWorkspaceOpen, addAgentOpen, sendOpen, openPrsOpen, error, railCollapsed, railWidth, railNews, drawerOpen, phoneTab, report, toggleRail, setRailWidth, noteAgentPost };
 });
