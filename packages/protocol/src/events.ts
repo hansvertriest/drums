@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { Agent, AgentStatus } from './agent.js';
 import { AnswerSet, Artifact } from './artifact.js';
-import { AgentId, ArtifactId, VersionNumber, WorkspaceId } from './ids.js';
+import { AgentId, ArtifactId, RepoName, VersionNumber, WorkspaceId } from './ids.js';
+import { PermissionRequest } from './permission.js';
 import { Post, Step } from './post.js';
+import { PullRequest } from './workspace.js';
 
 export const AgentAddedEvent = z.object({
   type: z.literal('agent.added'),
@@ -49,6 +51,30 @@ export const AnswersChangedEvent = z.object({
 });
 export type AnswersChangedEvent = z.infer<typeof AnswersChangedEvent>;
 
+/** A permission request appeared, or its answer changed. */
+export const PermissionChangedEvent = z.object({
+  type: z.literal('permission.changed'),
+  workspace: WorkspaceId,
+  request: PermissionRequest,
+});
+export type PermissionChangedEvent = z.infer<typeof PermissionChangedEvent>;
+
+/** Something changed in a repo's dyffle session: the branch, the feed, a build, or a review. */
+export const MapChangedEvent = z.object({
+  type: z.literal('map.changed'),
+  workspace: WorkspaceId,
+  repo: RepoName,
+  aspect: z.enum(['live', 'feed', 'status', 'review']),
+});
+export type MapChangedEvent = z.infer<typeof MapChangedEvent>;
+
+export const PrsOpenedEvent = z.object({
+  type: z.literal('prs.opened'),
+  workspace: WorkspaceId,
+  prs: z.array(z.object({ repo: RepoName, pr: PullRequest })),
+});
+export type PrsOpenedEvent = z.infer<typeof PrsOpenedEvent>;
+
 /** Everything `core` announces. Add a member here to add an event. */
 export const DomainEvent = z.discriminatedUnion('type', [
   AgentAddedEvent,
@@ -57,6 +83,9 @@ export const DomainEvent = z.discriminatedUnion('type', [
   PostCreatedEvent,
   ArtifactVersionEvent,
   AnswersChangedEvent,
+  PermissionChangedEvent,
+  MapChangedEvent,
+  PrsOpenedEvent,
 ]);
 export type DomainEvent = z.infer<typeof DomainEvent>;
 

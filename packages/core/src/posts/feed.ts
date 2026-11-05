@@ -1,9 +1,10 @@
 import type { Agent, AgentId, ArtifactId, Post, VersionNumber } from '@drums/protocol';
 
-/** Posts an agent wrote, as opposed to what the user sent it. `checkpoint` joins with M3. */
-export type AuthoredPost = Extract<Post, { kind: 'note' | 'version' }>;
+/** Posts an agent wrote, as opposed to what the user sent it. */
+export type AuthoredPost = Extract<Post, { kind: 'note' | 'version' | 'checkpoint' }>;
 
-export const isAuthored = (post: Post): post is AuthoredPost => post.kind === 'note' || post.kind === 'version';
+export const isAuthored = (post: Post): post is AuthoredPost =>
+  post.kind === 'note' || post.kind === 'version' || post.kind === 'checkpoint';
 
 export interface FeedEntry {
   seq: number;
@@ -39,7 +40,7 @@ export function toFeed(posts: readonly Post[], members: readonly Agent[], reader
         title: post.title,
         message: post.message,
         at: post.at,
-        ...(post.kind === 'version' ? { artifact: post.artifact, version: post.version } : {}),
+        ...(post.kind !== 'note' ? { artifact: post.artifact, version: post.version } : {}),
       };
     });
   return { posts: entries, cursor: Math.max(since, ...posts.map((post) => post.seq)) };

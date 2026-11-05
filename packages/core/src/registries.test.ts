@@ -25,12 +25,15 @@ describe('built-in registries', () => {
     }
   });
 
-  it('hold the roles of M2, with drums tools only', () => {
+  it('hold the roles, and only the one that needs a repo has more than drums tools', () => {
     const registry = createRoleRegistry();
-    expect(registry.list().map((role) => role.id)).toEqual(['scoper', 'researcher', 'designer', 'reviewer']);
-    for (const role of registry.list()) {
+    expect(registry.list().map((role) => role.id)).toEqual(['scoper', 'researcher', 'designer', 'coder', 'reviewer']);
+    const [coders, others] = [registry.list().filter((role) => role.needsRepo), registry.list().filter((role) => !role.needsRepo)];
+    expect(coders.map((role) => [role.id, role.access])).toEqual([['coder', 'shell-and-files']]);
+    expect(coders[0]!.tools).toEqual(expect.arrayContaining(['checkpoint', 'impact']));
+    for (const role of others) {
       expect(role.tools).toEqual(['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed']);
-      expect(role.needsRepo).toBeFalsy();
+      expect(role.access).toBeUndefined();
     }
   });
 

@@ -6,6 +6,7 @@ export interface FakeSession extends AgentSession {
   resumedFrom?: string;
   received: string[];
   interrupted: number;
+  answers: Array<{ id: string; decision: string }>;
   emit(event: AgentEvent): void;
   end(error?: Error): void;
   /** Calls one of the session's bound tools, the way the model would. */
@@ -36,9 +37,14 @@ function createFakeSession(options: AgentSessionOptions, resumedFrom?: string): 
     ...(resumedFrom ? { resumedFrom } : {}),
     received: [],
     interrupted: 0,
+    answers: [],
     events: events(),
     send: async (message) => void session.received.push(message),
     interrupt: async () => void (session.interrupted += 1),
+    async respondPermission(id, decision) {
+      session.answers.push({ id, decision });
+      return true;
+    },
     close: () => session.end(),
     emit(event) {
       queue.push(event);

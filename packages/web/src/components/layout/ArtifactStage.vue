@@ -18,7 +18,9 @@ const answers = useAnswers();
 const ui = useUi();
 
 const renderer = computed(() => (artifacts.current ? rendererFor(artifacts.current.renderer) : undefined));
-const frameKey = computed(() => `${workspaces.currentId}/${artifacts.currentId}/${artifacts.viewing}`);
+const frameKey = computed(() =>
+  renderer.value?.ownVersions ? `${workspaces.currentId}/${artifacts.currentId}` : `${workspaces.currentId}/${artifacts.currentId}/${artifacts.viewing}`,
+);
 
 /**
  * What the frame starts with: on the latest version the answers as they stand now, so a
@@ -64,13 +66,13 @@ const onAnswers = (next: Answer[]) => {
     <p v-if="artifacts.artifacts.length === 0" class="empty">Nothing here yet. What the agents make shows up here.</p>
     <template v-else>
       <ArtifactTabs />
-      <VersionPicker />
+      <VersionPicker v-if="!renderer?.ownVersions" />
       <div class="doc">
         <component
-          :is="renderer"
-          v-if="renderer && artifacts.content"
+          :is="renderer.component"
+          v-if="renderer && (renderer.ownVersions || artifacts.content)"
           :key="frameKey"
-          :content="artifacts.content.content"
+          :content="artifacts.content?.content ?? ''"
           :answers="startingAnswers"
           :read-only="!artifacts.isLatest"
           :changes="ui.showChanges"

@@ -3,7 +3,7 @@ import { createHarness } from '../testing/harness.js';
 
 const setup = async () => {
   const harness = createHarness();
-  const state = await harness.services.workspaces.create('Goal');
+  const state = await harness.services.workspaces.create({ goal: 'Goal' });
   const session = harness.backend.last();
   const call = async (id: string, args: unknown) => {
     const result = await session.tool(id, args);

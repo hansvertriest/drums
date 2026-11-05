@@ -7,6 +7,7 @@ import { createRoleRegistry } from '../roles/registry.js';
 import { createServices } from '../services.js';
 import { createToolRegistry } from '../tools/registry.js';
 import { createFakeBackend } from './fake-backend.js';
+import { createFakeCode } from './fake-code.js';
 import { createMemoryStore } from './memory-store.js';
 
 /** All of core against in-memory fakes, with the real registries. */
@@ -29,6 +30,7 @@ export function createHarness() {
       return picker.answer();
     },
   };
+  const code = createFakeCode();
   const services = createServices({
     store,
     backend,
@@ -39,9 +41,14 @@ export function createHarness() {
     tools: createToolRegistry(),
     artifactKinds: createArtifactKindRegistry(),
     rolePicker: picker,
+    git: code.git,
+    pullRequests: code.pullRequests,
+    projects: code.projects,
+    codeReview: code.codeReview,
+    viewerUrl: (workspace, repo) => `http://drums/map/${workspace}/${repo}/`,
     firstRole: 'scoper',
   });
-  return { store, backend, events, seen, services, picker };
+  return { store, backend, events, seen, services, picker, code };
 }
 
 /** Lets the agent service's event loop catch up with what a test emitted. */

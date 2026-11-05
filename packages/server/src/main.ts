@@ -1,8 +1,11 @@
-import { createArtifactKindRegistry, createEventBus, createRoleRegistry, createServices, createToolRegistry, type AgentBackend } from '@drums/core';
+import { createArtifactKindRegistry, createEventBus, createRoleRegistry, createServices, createToolRegistry, type AgentBackend, type CodeReview, type Git, type PullRequests } from '@drums/core';
 import { createClaudeBackend } from './adapters/claude/backend.js';
 import { createDyffleCodeReview } from './adapters/dyffle/code-review.js';
 import { createFsStore } from './adapters/fs-store/store.js';
+import { createExecaGit } from './adapters/git/git.js';
+import { createGhPullRequests } from './adapters/git/github.js';
 import { createSystemClock } from './adapters/system/clock.js';
+import { createConfigProjects } from './adapters/system/config-projects.js';
 import { createUuidIds } from './adapters/system/ids.js';
 import { createKeywordRolePicker } from './adapters/system/keyword-role-picker.js';
 import { loadConfig, type ConfigOverrides } from './config.js';
@@ -16,6 +19,11 @@ export interface DrumsOptions extends ConfigOverrides {
   webRoot: string;
   /** Replaces the Claude backend; tests use it so they never reach the model. */
   agentBackend?: AgentBackend;
+  /** Replaces `gh`; tests use it so they never reach a remote. */
+  pullRequests?: PullRequests;
+  /** Replace the adapters on git and dyffle. */
+  git?: Git;
+  codeReview?: CodeReview;
 }
 
 export interface RunningDrums {
@@ -25,12 +33,12 @@ export interface RunningDrums {
 
 const DEFAULT_HOST = '127.0.0.1';
 
-/** Every workspace starts with this role until the role picker picks for new ones too (M4). Add agent falls back on it. */
+/** A workspace without repos starts with this role until the role picker picks for new ones too (M4). Add agent falls back on it. */
 const FIRST_ROLE = 'scoper';
 
 /** The composition root: the one place that builds adapters, registries and services. */
 export async function main(options: DrumsOptions): Promise<RunningDrums> {
-  const { port, host = DEFAULT_HOST, webRoot, agentBackend, ...overrides } = options;
+  const { port, host = DEFAULT_HOST, webRoot, agentBackend, pullRequests, git, codeReview, ...overrides } = options;
   const config = loadConfig(overrides);
   const clock = createSystemClock();
   const ids = createUuidIds();
@@ -38,6 +46,9 @@ export async function main(options: DrumsOptions): Promise<RunningDrums> {
   const roles = createRoleRegistry();
   const tools = createToolRegistry();
   const artifactKinds = createArtifactKindRegistry();
+  const mapToken = ids.next();
+  /** Known once it listens. Nothing opens a code session before that. */
+  let origin = '';
   const services = createServices({
     store: createFsStore(config.workspacesRoot),
     backend: agentBackend ?? createClaudeBackend({ model: config.models.agent }),
@@ -48,19 +59,22 @@ export async function main(options: DrumsOptions): Promise<RunningDrums> {
     tools,
     artifactKinds,
     rolePicker: createKeywordRolePicker(),
+    git: git ?? createExecaGit(),
+    pullRequests: pullRequests ?? createGhPullRequests(),
+    projects: createConfigProjects(config.projects),
+    codeReview: codeReview ?? createDyffleCodeReview({ baseCacheDir: config.baseCacheDir }),
+    viewerUrl: (workspace, repo) => `${origin}/map/${mapToken}/${workspace}/${repo}/`,
     firstRole: FIRST_ROLE,
   });
   await services.agents.recover();
 
-  const app = createApp(
-    { clock, ids, codeReview: createDyffleCodeReview(), events, roles, tools, artifactKinds, services },
-    { webRoot, host },
-  );
+  const app = createApp({ clock, ids, mapToken, host, events, roles, tools, artifactKinds, services }, { webRoot, host });
   const listening = await listen(app, port, host);
+  origin = `http://${host}:${listening.port}`;
   return {
     url: `http://${host}:${listening.port}/`,
     async stop() {
-      services.agents.closeAll();
+      await services.close();
       await listening.close();
     },
   };

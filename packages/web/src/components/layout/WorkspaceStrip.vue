@@ -30,7 +30,7 @@ const open = (id: string) => void workspaces.open(id).catch(ui.report);
         <span class="icon">{{ initials(workspace) }}<i :class="`st-${workspace.status}`" /></span>
         <span class="text">
           <span class="goal">{{ workspace.goal }}</span>
-          <span class="meta">{{ workspace.status }}<template v-if="workspace.lastRole"> · {{ workspace.lastRole }}</template></span>
+          <span class="meta">{{ workspace.status }}<template v-if="workspace.lastRole"> · {{ workspace.lastRole }}</template><template v-if="workspace.additions !== undefined"> · +{{ workspace.additions }} −{{ workspace.deletions }}</template></span>
         </span>
       </button>
     </div>

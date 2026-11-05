@@ -5,7 +5,7 @@ import type { Clock } from '../ports/clock.js';
 import type { Store } from '../ports/store.js';
 import { toFeed, type Feed } from './feed.js';
 
-type WithoutPlace<D> = D extends unknown ? Omit<D, 'agent' | 'at'> : never;
+export type WithoutPlace<D> = D extends unknown ? Omit<D, 'agent' | 'at'> : never;
 
 export interface PostService {
   add(workspace: WorkspaceId, agent: AgentId, post: WithoutPlace<PostDraft>): Promise<Post>;

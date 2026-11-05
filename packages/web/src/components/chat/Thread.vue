@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { Post, Step } from '@drums/protocol';
+import type { PermissionRequest, Post, Step } from '@drums/protocol';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useAgents } from '../../stores/agents';
 import { useThreads } from '../../stores/threads';
 import { useUi } from '../../stores/ui';
+import PermissionRow from './PermissionRow.vue';
 import PostCard from './PostCard.vue';
 
 const threads = useThreads();
@@ -11,7 +12,10 @@ const agents = useAgents();
 const ui = useUi();
 const list = ref<HTMLElement>();
 
-type Item = { key: string; at: string; post: Post; step?: undefined } | { key: string; at: string; step: Step; post?: undefined };
+type Item =
+  | { key: string; at: string; post: Post; step?: undefined; permission?: undefined }
+  | { key: string; at: string; step: Step; post?: undefined; permission?: undefined }
+  | { key: string; at: string; permission: PermissionRequest; post?: undefined; step?: undefined };
 
 /** Posts and steps by time. Tool steps only with the toggle on; text and errors the user always needs to see. */
 const items = computed<Item[]>(() => {
@@ -20,7 +24,10 @@ const items = computed<Item[]>(() => {
   const steps: Item[] = threads.steps
     .filter((s) => s.agent === agent && (s.kind !== 'tool' || ui.showSteps))
     .map((step) => ({ key: `s${step.seq}`, at: step.at, step }));
-  return [...posts, ...steps].sort((a, b) => a.at.localeCompare(b.at));
+  const permissions: Item[] = threads.permissions
+    .filter((request) => request.agent === agent)
+    .map((permission) => ({ key: `r${permission.id}`, at: permission.at, permission }));
+  return [...posts, ...steps, ...permissions].sort((a, b) => a.at.localeCompare(b.at));
 });
 
 const nearEnd = () => {
@@ -43,6 +50,7 @@ watch(
   <div ref="list" class="thread">
     <template v-for="item in items" :key="item.key">
       <PostCard v-if="item.post" :post="item.post" />
+      <PermissionRow v-else-if="item.permission" :request="item.permission" />
       <div v-else-if="item.step?.kind === 'tool'" class="tool">
         <span>›</span><span><b>{{ item.step.tool }}</b> {{ item.step.summary }}</span>
       </div>

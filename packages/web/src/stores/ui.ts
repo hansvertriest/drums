@@ -7,6 +7,7 @@ export const useUi = defineStore('ui', () => {
   const newWorkspaceOpen = ref(false);
   const addAgentOpen = ref(false);
   const sendOpen = ref(false);
+  const openPrsOpen = ref(false);
   /** A refusal or failure to show the user. */
   const error = ref<string>();
 
@@ -14,5 +15,5 @@ export const useUi = defineStore('ui', () => {
     error.value = cause instanceof Error ? cause.message : String(cause);
   };
 
-  return { showSteps, showChanges, newWorkspaceOpen, addAgentOpen, sendOpen, error, report };
+  return { showSteps, showChanges, newWorkspaceOpen, addAgentOpen, sendOpen, openPrsOpen, error, report };
 });

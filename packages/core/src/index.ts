@@ -20,6 +20,8 @@ export type { PostService } from './posts/post-service.js';
 export type { Feed, FeedEntry } from './posts/feed.js';
 export type { ArtifactService, UpdateResult, VersionContent } from './artifacts/artifact-service.js';
 export type { AgentService } from './agents/agent-service.js';
+export type { CheckpointResult, CodeService } from './code/code-service.js';
+export type { PrService } from './code/pr-service.js';
 export type { FeedbackService } from './feedback/feedback-service.js';
 export { formatFeedback, type FeedbackGroup } from './feedback/format.js';
 export type { WorkspaceService } from './workspaces/workspace-service.js';

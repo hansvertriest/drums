@@ -3,7 +3,7 @@ import { createHarness, settle } from '../testing/harness.js';
 
 const setup = async () => {
   const harness = createHarness();
-  const state = await harness.services.workspaces.create('Scope it');
+  const state = await harness.services.workspaces.create({ goal: 'Scope it' });
   return { ...harness, ws: state.workspace.id, agent: state.workspace.agents[0]!.id };
 };
 

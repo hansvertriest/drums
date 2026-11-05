@@ -1,4 +1,4 @@
-import type { ToolId } from '@drums/protocol';
+import type { PermissionDecision, ToolId } from '@drums/protocol';
 import type { z } from 'zod';
 
 /** What a session reports while it runs. */
@@ -7,6 +7,10 @@ export type AgentEvent =
   | { type: 'session'; sessionId: string }
   | { type: 'step'; tool: string; summary: string }
   | { type: 'text'; text: string }
+  /** A call only the user can decide. The turn waits for `respondPermission`. */
+  | { type: 'permission.requested'; id: string; tool: string; title: string; detail: string }
+  /** The backend stopped waiting for that answer, because its turn was cancelled. */
+  | { type: 'permission.cancelled'; id: string }
   | { type: 'turn.ended'; outcome: 'success' | 'error'; error?: string };
 
 export interface ToolCallResult {
@@ -22,18 +26,29 @@ export interface BoundTool {
   call(args: unknown): Promise<ToolCallResult>;
 }
 
+/**
+ * What a session can touch besides its tools.
+ * - `tools-only`: exactly `tools`, and everything else is denied.
+ * - `shell-and-files`: also a shell and file tools. The backend decides what it approves by
+ *   itself, and sends the rest as `permission.requested`. The folder is not a security boundary.
+ */
+export type SystemAccess = 'tools-only' | 'shell-and-files';
+
 export interface AgentSessionOptions {
   cwd: string;
   /** The role prompt, which carries the artifact contract. */
   prompt: string;
-  /** The session gets exactly these tools. Everything else is denied. */
+  /** The tools drums gives this session. */
   tools: BoundTool[];
+  access: SystemAccess;
 }
 
 export interface AgentSession {
   readonly events: AsyncIterable<AgentEvent>;
   send(message: string): Promise<void>;
   interrupt(): Promise<void>;
+  /** Answers a `permission.requested`. False if nothing is waiting under that id. */
+  respondPermission(id: string, decision: PermissionDecision): Promise<boolean>;
   close(): void;
 }
 

@@ -9,8 +9,8 @@ export const workspaceRoutes: RouteGroup = {
     return new Hono()
       .get('/', async (c) => c.json((await services.workspaces.list()) satisfies WorkspaceList))
       .post('/', async (c) => {
-        const { goal } = await parseBody(c, CreateWorkspaceRequest);
-        return c.json((await services.workspaces.create(goal)) satisfies WorkspaceState, 201);
+        const request = await parseBody(c, CreateWorkspaceRequest);
+        return c.json((await services.workspaces.create(request)) satisfies WorkspaceState, 201);
       })
       .get('/:ws', async (c) => c.json((await services.workspaces.state(workspaceParam(c))) satisfies WorkspaceState));
   },

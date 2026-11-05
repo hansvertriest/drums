@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { useAgents } from '../../stores/agents';
 import { useAnswers } from '../../stores/answers';
 import { useArtifacts } from '../../stores/artifacts';
+import { useMap } from '../../stores/map';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
 
@@ -11,6 +12,7 @@ const workspaces = useWorkspaces();
 const artifacts = useArtifacts();
 const agents = useAgents();
 const answers = useAnswers();
+const map = useMap();
 const ui = useUi();
 const overall = ref('');
 const sending = ref(false);
@@ -20,7 +22,10 @@ const groups = computed(() =>
     .map((artifact) => ({ artifact, latest: artifact.versions.at(-1), pending: answers.pendingFor(artifact.id) }))
     .filter(({ pending }) => pending.length > 0),
 );
-const canSend = computed(() => !sending.value && (groups.value.length > 0 || overall.value.trim().length > 0));
+const codeRepos = computed(() => map.repos.filter((repo) => repo.pendingComments > 0));
+const codeRecipient = computed(() => map.commentsTo && agents.nameOf(map.commentsTo));
+const nothingElse = computed(() => groups.value.length === 0 && codeRepos.value.length === 0);
+const canSend = computed(() => !sending.value && (!nothingElse.value || overall.value.trim().length > 0));
 
 const send = async () => {
   if (!workspaces.currentId || !canSend.value) return;
@@ -28,7 +33,7 @@ const send = async () => {
   try {
     const note = overall.value.trim() || undefined;
     // With no answers to go with, the note goes to the tab that is open.
-    await api.send(workspaces.currentId, { overall: note, to: groups.value.length === 0 ? agents.current?.id : undefined });
+    await api.send(workspaces.currentId, { overall: note, to: nothingElse.value ? agents.current?.id : undefined });
     overall.value = '';
     ui.sendOpen = false;
   } catch (error) {
@@ -48,7 +53,13 @@ const send = async () => {
         <span>{{ answer.label }}</span><b>{{ answer.value.slice(0, 120) }}</b>
       </div>
     </template>
-    <p v-if="groups.length === 0" class="hint">Nothing changed yet. A note goes to {{ agents.current?.name }}.</p>
+    <template v-if="codeRepos.length > 0">
+      <h5>Code comments → {{ codeRecipient }}</h5>
+      <div v-for="repo in codeRepos" :key="repo.name" class="answer">
+        <span>{{ repo.name }}</span><b>{{ repo.pendingComments }} comment{{ repo.pendingComments === 1 ? '' : 's' }}</b>
+      </div>
+    </template>
+    <p v-if="nothingElse" class="hint">Nothing changed yet. A note goes to {{ agents.current?.name }}.</p>
     <textarea v-model="overall" aria-label="Overall note" placeholder="Anything else…" />
     <div class="acts">
       <button type="button" @click="ui.sendOpen = false">Close</button>

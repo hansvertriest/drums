@@ -1,11 +1,14 @@
-import type { ArtifactKindRegistry, Clock, CodeReview, EventBus, Ids, RoleRegistry, Services, ToolRegistry } from '@drums/core';
+import type { ArtifactKindRegistry, Clock, EventBus, Ids, RoleRegistry, Services, ToolRegistry } from '@drums/core';
 import type { Hono } from 'hono';
 
 /** Everything a route group may use. Built once, in `main.ts`. */
 export interface HttpDeps {
   clock: Clock;
   ids: Ids;
-  codeReview: CodeReview;
+  /** The secret in the map's URLs: its frames have no origin to check, so this is what lets them in. */
+  mapToken: string;
+  /** The interface the server is bound to. */
+  host: string;
   events: EventBus;
   roles: RoleRegistry;
   tools: ToolRegistry;

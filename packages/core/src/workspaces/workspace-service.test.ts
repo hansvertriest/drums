@@ -25,7 +25,7 @@ describe('workspaceSlug', () => {
 describe('WorkspaceService', () => {
   it('creates a workspace with one running Scoper and shows the goal in its thread', async () => {
     const { services } = createHarness();
-    const { workspace, posts } = await services.workspaces.create('Scope checkout');
+    const { workspace, posts } = await services.workspaces.create({ goal: 'Scope checkout' });
     expect(workspace.goal).toBe('Scope checkout');
     expect(workspace.agents.map((a) => [a.role, a.status])).toEqual([['scoper', 'running']]);
     expect(posts).toMatchObject([{ kind: 'message', text: 'Scope checkout' }]);
@@ -33,7 +33,7 @@ describe('WorkspaceService', () => {
 
   it('lists workspaces with their status and the role that posted last', async () => {
     const { services, backend } = createHarness();
-    const { workspace } = await services.workspaces.create('Goal');
+    const { workspace } = await services.workspaces.create({ goal: 'Goal' });
     expect(await services.workspaces.list()).toMatchObject([{ id: workspace.id, status: 'running' }]);
     await backend.last().tool('post', { title: 't', message: 'm' });
     expect((await services.workspaces.list())[0]?.lastRole).toBe('scoper');
@@ -41,7 +41,7 @@ describe('WorkspaceService', () => {
 
   it('sums up several agents by what most needs the user', async () => {
     const { services, backend, picker } = createHarness();
-    const { workspace } = await services.workspaces.create('Goal');
+    const { workspace } = await services.workspaces.create({ goal: 'Goal' });
     const scoper = backend.last();
     picker.answer = async () => [{ role: 'designer', instruction: 'Draw' }];
     await services.agents.add(workspace.id, 'Draw');

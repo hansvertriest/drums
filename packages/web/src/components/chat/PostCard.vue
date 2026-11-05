@@ -23,6 +23,9 @@ const artifacts = useArtifacts();
   <div v-else-if="post.kind === 'feedback'" class="user">
     <span class="who">You · {{ shortTime(post.at) }}</span>
     <div v-if="post.overall" class="md" v-html="renderMarkdown(post.overall)" />
+    <p v-for="block in post.code ?? []" :key="block.repo" class="sent-code">
+      {{ block.comments }} comment{{ block.comments === 1 ? '' : 's' }} on {{ block.repo }}
+    </p>
     <ul>
       <template v-for="item in post.items" :key="item.artifact">
         <li v-for="answer in item.answers" :key="answer.name">
@@ -39,6 +42,19 @@ const artifacts = useArtifacts();
     </header>
     <h3>{{ post.title }}</h3>
     <div class="md" v-html="renderMarkdown(post.message)" />
+    <button
+      v-if="post.kind === 'checkpoint'"
+      type="button"
+      class="open"
+      :aria-label="`Open the branch map at ${post.title}`"
+      @click="artifacts.open(post.artifact)"
+    >
+      <span v-for="repo in post.repos" :key="repo.name">
+        {{ repo.name }} · {{ repo.files }} file{{ repo.files === 1 ? '' : 's' }}
+        <span class="a">+{{ repo.additions }}</span> <span class="d">−{{ repo.deletions }}</span>
+      </span>
+      <span class="go" aria-hidden="true">→</span>
+    </button>
     <button
       v-if="post.kind === 'version'"
       type="button"
@@ -135,6 +151,16 @@ h3 {
   background: var(--surface-2);
   font-family: var(--mono);
   font-size: 0.9em;
+}
+.sent-code {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.a {
+  color: var(--add);
+}
+.d {
+  color: var(--del);
 }
 .open {
   display: flex;

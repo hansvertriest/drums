@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { AnswerSet, Answers, Artifact, ArtifactVersion } from './artifact.js';
 import { Focus } from './focus.js';
-import { AgentId, ArtifactKindId, RoleId, ToolId, VersionNumber } from './ids.js';
+import { AgentId, ArtifactKindId, BranchName, RepoName, RoleId, ToolId, VersionNumber } from './ids.js';
+import { PermissionDecision } from './permission.js';
 import { Post, Step } from './post.js';
-import { Workspace, WorkspaceSummary } from './workspace.js';
+import { PullRequest, Workspace, WorkspaceSummary } from './workspace.js';
 
 /** `GET /api/health` */
 export const HealthResponse = z.object({
@@ -23,8 +24,12 @@ export type ApiError = z.infer<typeof ApiError>;
 export const WorkspaceList = z.array(WorkspaceSummary);
 export type WorkspaceList = z.infer<typeof WorkspaceList>;
 
-/** `POST /api/workspaces`. Repos and branch join with M3. */
-export const CreateWorkspaceRequest = z.object({ goal: z.string().trim().min(1).max(20_000) });
+/** `POST /api/workspaces` */
+export const CreateWorkspaceRequest = z.object({
+  goal: z.string().trim().min(1).max(20_000),
+  repos: z.array(z.object({ name: RepoName, base: BranchName })).max(20).default([]),
+  branch: BranchName.optional(),
+});
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequest>;
 
 /** `GET /api/workspaces/:ws`: everything the page needs but version content. */
@@ -69,3 +74,64 @@ export const SendFeedbackRequest = z.object({
   to: AgentId.optional(),
 });
 export type SendFeedbackRequest = z.infer<typeof SendFeedbackRequest>;
+
+/** `GET /api/projects`: the repos a new workspace can attach, by name. No folder paths. */
+export const ProjectList = z.array(
+  z.object({
+    name: RepoName,
+    branches: z.array(BranchName),
+    /** The branch to offer first. */
+    base: BranchName,
+  }),
+);
+export type ProjectList = z.infer<typeof ProjectList>;
+
+const Changes = {
+  files: z.number().int().nonnegative(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+};
+
+/** `GET /api/workspaces/:ws/map`: what the page needs around the map's frames. */
+export const MapState = z.object({
+  branch: BranchName.optional(),
+  /** Who Send gives the code comments to. */
+  commentsTo: AgentId.optional(),
+  repos: z.array(
+    z.object({
+      name: RepoName,
+      base: BranchName,
+      ...Changes,
+      /** Where the frame goes; absent while the repo's session can't run. */
+      viewer: z.string().optional(),
+      /** Why it can't. */
+      error: z.string().optional(),
+      /** Comments Send hasn't delivered yet. */
+      pendingComments: z.number().int().nonnegative(),
+      pr: PullRequest.optional(),
+    }),
+  ),
+});
+export type MapState = z.infer<typeof MapState>;
+
+/** `GET /api/workspaces/:ws/prs`: what the Open PRs dialog starts with. */
+export const PrDrafts = z.object({
+  title: z.string(),
+  branch: BranchName.optional(),
+  repos: z.array(z.object({ name: RepoName, base: BranchName, ...Changes, body: z.string(), pr: PullRequest.optional() })),
+});
+export type PrDrafts = z.infer<typeof PrDrafts>;
+
+/** `POST /api/workspaces/:ws/prs`: one per repo, all with this title. */
+export const OpenPrsRequest = z.object({
+  title: z.string().trim().min(1).max(300),
+  repos: z.array(z.object({ name: RepoName, body: z.string().max(100_000) })).min(1).max(20),
+});
+export type OpenPrsRequest = z.infer<typeof OpenPrsRequest>;
+
+export const OpenPrsResponse = z.object({ prs: z.array(z.object({ repo: RepoName, pr: PullRequest })) });
+export type OpenPrsResponse = z.infer<typeof OpenPrsResponse>;
+
+/** `POST /api/workspaces/:ws/agents/:a/permissions/:id` */
+export const AnswerPermissionRequest = z.object({ decision: PermissionDecision });
+export type AnswerPermissionRequest = z.infer<typeof AnswerPermissionRequest>;

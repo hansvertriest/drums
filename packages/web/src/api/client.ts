@@ -2,10 +2,17 @@ import {
   Agent,
   AnswerSet,
   ApiError as ApiErrorBody,
+  MapState,
+  OpenPrsResponse,
+  PrDrafts,
+  ProjectList,
   VersionResponse,
   WorkspaceList,
   WorkspaceState,
   type Answer,
+  type CreateWorkspaceRequest,
+  type OpenPrsRequest,
+  type PermissionDecision,
   type Focus,
   type VersionNumber,
 } from '@drums/protocol';
@@ -39,7 +46,8 @@ const workspacePath = (ws: string) => `/api/workspaces/${encodeURIComponent(ws)}
 /** The typed client for the HTTP API. Everything it returns went through the protocol's schemas. */
 export const api = {
   listWorkspaces: () => request('/api/workspaces', WorkspaceList),
-  createWorkspace: (goal: string) => request('/api/workspaces', WorkspaceState, withBody('POST', { goal })),
+  createWorkspace: (body: CreateWorkspaceRequest) => request('/api/workspaces', WorkspaceState, withBody('POST', body)),
+  projects: () => request('/api/projects', ProjectList),
   workspace: (ws: string) => request(workspacePath(ws), WorkspaceState),
   addAgent: (ws: string, instruction: string) => request(`${workspacePath(ws)}/agents`, Agent, withBody('POST', { instruction })),
   sendMessage: (ws: string, agent: string, text: string, focus?: Focus) =>
@@ -50,6 +58,11 @@ export const api = {
     request(`${workspacePath(ws)}/artifacts/${encodeURIComponent(artifact)}/versions/${version}`, VersionResponse),
   saveAnswers: (ws: string, artifact: string, version: VersionNumber, answers: Answer[]) =>
     request(`${workspacePath(ws)}/artifacts/${encodeURIComponent(artifact)}/answers`, AnswerSet, withBody('PUT', { version, answers })),
+  map: (ws: string) => request(`${workspacePath(ws)}/map`, MapState),
+  prDrafts: (ws: string) => request(`${workspacePath(ws)}/prs`, PrDrafts),
+  openPrs: (ws: string, body: OpenPrsRequest) => request(`${workspacePath(ws)}/prs`, OpenPrsResponse, withBody('POST', body)),
+  answerPermission: (ws: string, agent: string, id: string, decision: PermissionDecision) =>
+    request<void>(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/permissions/${encodeURIComponent(id)}`, undefined, withBody('POST', { decision })),
   send: (ws: string, body: { overall?: string | undefined; to?: string | undefined }) =>
     request<void>(`${workspacePath(ws)}/send`, undefined, withBody('POST', body)),
 };

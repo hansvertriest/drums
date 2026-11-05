@@ -11,11 +11,14 @@ const refuse = (c: Context) => c.json({ error: 'This server only answers its own
  * to have open must not reach it. `Host` stops DNS rebinding; `Origin` stops other sites and
  * sandboxed artifacts (whose origin is `null`), even with a body type that skips CORS preflight.
  */
+export function isOurHost(host: string | undefined, boundHost: string): boolean {
+  return [...LOOPBACK, boundHost].includes(hostnameOf(host ?? ''));
+}
+
 export function sameOriginOnly(boundHost: string): MiddlewareHandler {
-  const allowed = new Set([...LOOPBACK, boundHost]);
   return async (c, next) => {
     const host = c.req.header('host') ?? '';
-    if (!allowed.has(hostnameOf(host))) return refuse(c);
+    if (!isOurHost(host, boundHost)) return refuse(c);
     const origin = c.req.header('origin');
     if (origin !== undefined && origin !== `http://${host}`) return refuse(c);
     await next();

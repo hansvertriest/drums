@@ -1,4 +1,4 @@
-import type { DomainEvent, WorkspaceId, WorkspaceState, WorkspaceSummary } from '@drums/protocol';
+import type { CreateWorkspaceRequest, DomainEvent, WorkspaceId, WorkspaceState, WorkspaceSummary } from '@drums/protocol';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { api } from '../api/client';
@@ -6,6 +6,7 @@ import { subscribe } from '../api/live';
 import { useAgents } from './agents';
 import { useAnswers } from './answers';
 import { useArtifacts } from './artifacts';
+import { useMap } from './map';
 import { useThreads } from './threads';
 import { useUi } from './ui';
 
@@ -22,13 +23,25 @@ export const useWorkspaces = defineStore('workspaces', () => {
   const threads = useThreads();
   const artifacts = useArtifacts();
   const answers = useAnswers();
+  const map = useMap();
   const ui = useUi();
 
   const loadState = (state: WorkspaceState) => {
     agents.load(state.workspace.agents);
-    threads.load(state.posts, state.steps);
+    threads.load(state.posts, state.steps, state.workspace.permissions);
     artifacts.load(state.artifacts);
     answers.load(state.answers);
+    map.reset();
+    if (state.workspace.repos.length > 0) void map.load(state.workspace.id).catch(ui.report);
+  };
+
+  /** Counts around the map. Many events can come at once while an agent works. */
+  let mapTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleMapRefresh = () => {
+    mapTimer ??= setTimeout(() => {
+      mapTimer = undefined;
+      if (currentId.value) void map.load(currentId.value).catch(ui.report);
+    }, LIST_REFRESH_MS);
   };
 
   const refreshList = async () => {
@@ -68,6 +81,12 @@ export const useWorkspaces = defineStore('workspaces', () => {
     'post.created': (event) => threads.addPost(event.post),
     'artifact.version': (event) => artifacts.addVersion(event.artifact, event.artifact.versions.at(-1)?.by === agents.current?.id),
     'answers.changed': (event) => answers.set(event.set),
+    'permission.changed': (event) => threads.setPermission(event.request),
+    // The frame follows its own session; what happens during a build changes nothing out here.
+    'map.changed': (event) => {
+      if (event.aspect !== 'status') scheduleMapRefresh();
+    },
+    'prs.opened': () => scheduleMapRefresh(),
   };
   function dispatch(event: DomainEvent) {
     (handlers[event.type] as (e: DomainEvent) => void)(event);
@@ -97,8 +116,8 @@ export const useWorkspaces = defineStore('workspaces', () => {
     agents.currentId = agent.id;
   };
 
-  const create = async (goal: string) => {
-    const state = await api.createWorkspace(goal);
+  const create = async (request: CreateWorkspaceRequest) => {
+    const state = await api.createWorkspace(request);
     await refreshList();
     await open(state.workspace.id);
   };

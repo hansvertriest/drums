@@ -18,7 +18,7 @@ const answers = useAnswers();
       @click="artifacts.open(artifact.id)"
     >
       {{ artifact.title }}
-      <span class="version">v{{ artifact.versions.at(-1)?.version }}</span>
+      <span v-if="artifact.versions.length > 0" class="version">v{{ artifact.versions.at(-1)?.version }}</span>
       <span v-if="answers.pendingFor(artifact.id).length" class="count">{{ answers.pendingFor(artifact.id).length }}</span>
     </button>
   </div>

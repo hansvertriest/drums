@@ -1,5 +1,5 @@
 import { InvalidError } from '@drums/core';
-import { AgentId, ArtifactId, VersionNumber, WorkspaceId } from '@drums/protocol';
+import { AgentId, ArtifactId, RepoName, VersionNumber, WorkspaceId } from '@drums/protocol';
 import type { Context } from 'hono';
 import type { z } from 'zod';
 
@@ -21,6 +21,7 @@ function param<S extends z.ZodType>(c: Context, name: string, schema: S): z.infe
 
 export const workspaceParam = (c: Context) => param(c, 'ws', WorkspaceId);
 export const agentParam = (c: Context) => param(c, 'a', AgentId);
+export const repoParam = (c: Context) => param(c, 'repo', RepoName);
 export const artifactParam = (c: Context) => param(c, 'id', ArtifactId);
 
 export function versionParam(c: Context): VersionNumber {

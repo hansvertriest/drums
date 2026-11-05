@@ -5,15 +5,16 @@ import type {
   ArtifactKindId,
   ArtifactMeta,
   ArtifactVersion,
+  PostDraft,
   VersionNumber,
   WorkspaceId,
 } from '@drums/protocol';
 import { createTurns } from '../concurrency/turns.js';
-import { NotFoundError } from '../errors.js';
+import { InvalidError, NotFoundError } from '../errors.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { Clock } from '../ports/clock.js';
 import type { Store } from '../ports/store.js';
-import type { PostService } from '../posts/post-service.js';
+import type { PostService, WithoutPlace } from '../posts/post-service.js';
 import type { ArtifactKindRegistry } from './registry.js';
 
 export interface VersionContent extends ArtifactVersion {
@@ -40,12 +41,23 @@ export interface ArtifactService {
     agent: AgentId,
     input: { id: ArtifactId; baseVersion: VersionNumber; content: string; note: string },
   ): Promise<UpdateResult>;
+  /** An artifact with no version yet, for a kind that has something to show without one. */
+  createEmpty(workspace: WorkspaceId, input: { title: string; kind: ArtifactKindId }): Promise<ArtifactMeta>;
+  /** A version from drums itself, for a `managed` kind. `post` makes its thread entry. */
+  record(
+    workspace: WorkspaceId,
+    agent: AgentId,
+    input: { id: ArtifactId; content: string; note: string; post(version: VersionNumber): ArtifactPost },
+  ): Promise<{ version: VersionNumber }>;
   /**
    * One at a time per workspace: new versions, and whatever depends on which version is the
    * latest. Don't call `create` or `update` inside it: they take the same turn.
    */
   exclusive<T>(workspace: WorkspaceId, work: () => Promise<T>): Promise<T>;
 }
+
+/** A version's thread entry, without what the post service adds. */
+export type ArtifactPost = WithoutPlace<Extract<PostDraft, { kind: 'version' | 'checkpoint' }>>;
 
 export interface ArtifactServiceDeps {
   store: Store;
@@ -89,11 +101,12 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
     number: VersionNumber,
     content: string,
     note: string,
+    post: ArtifactPost = { kind: 'version', title: meta.title, message: note, artifact: meta.id, version: number },
   ) => {
     const version: ArtifactVersion = { version: number, by: agent, note, at: clock.now().toISOString() };
     if (!(await store.addVersion(workspace, meta.id, version, content))) return false;
     if (number > 1) await deps.onNewVersion?.(workspace, meta.id, number - 1, number);
-    await posts.add(workspace, agent, { kind: 'version', title: meta.title, message: note, artifact: meta.id, version: number });
+    await posts.add(workspace, agent, post);
     events.emit({ type: 'artifact.version', workspace, artifact: await view(workspace, meta), version: number });
     return true;
   };
@@ -103,7 +116,7 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
       const metas = await store.listArtifacts(workspace);
       const views = await Promise.all(metas.map((meta) => view(workspace, meta)));
       // One being created right now has no version yet, and nothing to show.
-      return views.filter((artifact) => artifact.versions.length > 0);
+      return views.filter((artifact) => artifact.versions.length > 0 || kinds.get(artifact.kind).showsWithoutVersions);
     },
     get: async (workspace, id) => view(workspace, await metaOf(workspace, id)),
     read,
@@ -118,13 +131,25 @@ export function createArtifactService(deps: ArtifactServiceDeps): ArtifactServic
     },
     async update(workspace, agent, { id, baseVersion, content, note }) {
       const meta = await metaOf(workspace, id);
-      kinds.get(meta.kind).validate(content);
+      const definition = kinds.get(meta.kind);
+      if (definition.managed) throw new InvalidError(definition.managed);
+      definition.validate(content);
       return exclusive(workspace, async (): Promise<UpdateResult> => {
         const latest = await read(workspace, id);
         if (latest.version === baseVersion && (await publish(workspace, agent, meta, baseVersion + 1, content, note))) {
           return { status: 'ok', version: baseVersion + 1 };
         }
         return { status: 'conflict', latest: await read(workspace, id) };
+      });
+    },
+    createEmpty: (workspace, { title, kind }) => store.createArtifact(workspace, { title, kind, createdAt: clock.now().toISOString() }),
+    async record(workspace, agent, { id, content, note, post }) {
+      const meta = await metaOf(workspace, id);
+      kinds.get(meta.kind).validate(content);
+      return exclusive(workspace, async () => {
+        const version = ((await store.listVersions(workspace, id)).at(-1)?.version ?? 0) + 1;
+        await publish(workspace, agent, meta, version, content, note, post(version));
+        return { version };
       });
     },
     exclusive,

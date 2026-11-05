@@ -17,8 +17,12 @@ const text = ref('');
 
 const agent = computed(() => agents.current);
 const running = computed(() => agent.value?.status === 'running');
+/** Its turn waits on an allow or a deny: nothing can be sent, but it can be stopped. */
+const asking = computed(() => threads.permissions.some((request) => request.agent === agent.value?.id && request.status === 'pending'));
+const busy = computed(() => running.value || asking.value);
 const placeholder = computed(() => {
   if (!agent.value) return '';
+  if (asking.value) return `${agent.value.name} is waiting for your answer above`;
   return running.value ? `${agent.value.name} is working…` : `Message ${agent.value.name}…`;
 });
 const working = computed(() => {
@@ -28,7 +32,7 @@ const working = computed(() => {
 
 const send = async () => {
   const message = text.value.trim();
-  if (!message || !agent.value || !workspaces.currentId || running.value) return;
+  if (!message || !agent.value || !workspaces.currentId || busy.value) return;
   text.value = '';
   try {
     await api.sendMessage(workspaces.currentId, agent.value.id, message, focus.focus);
@@ -45,8 +49,8 @@ const stop = () => {
 
 <template>
   <form class="composer" @submit.prevent="send">
-    <div v-if="running" class="working">
-      <span>● {{ working }}</span>
+    <div v-if="busy" class="working">
+      <span>● {{ asking ? 'Waiting for your answer' : working }}</span>
       <button type="button" @click="stop">Stop</button>
     </div>
     <FocusChip />
@@ -59,7 +63,7 @@ const stop = () => {
         :disabled="!agent"
         @keydown.enter.exact.prevent="send"
       />
-      <button class="primary" type="submit" :disabled="!text.trim() || running || !agent">Send</button>
+      <button class="primary" type="submit" :disabled="!text.trim() || busy || !agent">Send</button>
     </div>
   </form>
 </template>

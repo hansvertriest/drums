@@ -27,3 +27,14 @@ export type ArtifactId = z.infer<typeof ArtifactId>;
 
 export const VersionNumber = z.number().int().positive();
 export type VersionNumber = z.infer<typeof VersionNumber>;
+
+/** A repo's folder in a workspace, and its name on screen. One path segment: repo names may hold dots. */
+export const RepoName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/);
+export type RepoName = z.infer<typeof RepoName>;
+
+/** A git ref as a user gives it. It ends up in git's arguments, so it can't look like an option. */
+export const BranchName = z
+  .string()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/)
+  .refine((name) => !name.includes('..') && !name.endsWith('/') && !name.endsWith('.lock'), 'Not a usable branch name.');
+export type BranchName = z.infer<typeof BranchName>;

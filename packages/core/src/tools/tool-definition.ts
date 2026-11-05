@@ -1,6 +1,7 @@
 import type { AgentId, ArtifactKindId, ToolId, WorkspaceId } from '@drums/protocol';
 import type { z } from 'zod';
 import type { ArtifactService } from '../artifacts/artifact-service.js';
+import type { CodeService } from '../code/code-service.js';
 import type { ToolCallResult } from '../ports/agent-backend.js';
 import type { PostService } from '../posts/post-service.js';
 
@@ -13,6 +14,7 @@ export interface ToolServices {
     /** Agent ids mean nothing to another agent: this is how a tool names them. */
     namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
   };
+  code: Pick<CodeService, 'checkpoint' | 'impact'>;
 }
 
 /** Knows the calling agent, so attribution is automatic. */

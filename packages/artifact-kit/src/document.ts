@@ -15,9 +15,6 @@ export const artifactCsp = [
   'media-src data:',
   "form-action 'none'",
   "base-uri 'none'",
-  // Peer connections sidestep the rest of this policy. Only a browser that knows this directive
-  // stops them: Chromium 156 reports it as unrecognized and still sends STUN packets, so don't rely on it.
-  "webrtc 'block'",
 ].join('; ');
 
 /** The attribute value of the iframe. Never add `allow-same-origin`: it would give the artifact the app. */

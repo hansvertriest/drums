@@ -23,6 +23,8 @@ State lives in files, per spec §8. These environment variables move it; use the
 | `DRUMS_WORKSPACES_ROOT` | `workspacesRoot` in `config.json`, else `<home>/workspaces` | where workspaces live |
 | `DRUMS_AGENT_MODEL` | `models.agent` in `config.json`, else the default in `packages/server/src/config.ts` | the agents' model |
 
+To attach repos to workspaces, list them in `config.json`: `{ "projects": ["/path/to/repo"] }`. A repo's folder name is what you see. Workspaces get a worktree of each repo, and base indexes are shared in `<home>/dyffle-base`. `gh` on `PATH` opens the PRs, with its own login.
+
 Agents use the machine's existing Claude Code login. The server binds to `127.0.0.1`; there is no auth.
 
 `npm test`, `npm run typecheck` and `npm run lint` check the workspace. `npm run lint` also enforces the dependency rules of spec §3; the table is in `tools/eslint/boundaries.js`.

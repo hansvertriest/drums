@@ -51,8 +51,8 @@ describe('main', () => {
     const response = await get('/api/health');
     expect(response.status).toBe(200);
     const body = HealthResponse.parse(await response.json());
-    expect(body.roles).toEqual(['scoper', 'researcher', 'designer', 'reviewer']);
-    expect(body.artifactKinds).toEqual(['html']);
+    expect(body.roles).toEqual(['scoper', 'researcher', 'designer', 'coder', 'reviewer']);
+    expect(body.artifactKinds).toEqual(['html', 'branch-map']);
     expect(body.tools).toContain('artifact_update');
   });
 
@@ -67,7 +67,7 @@ describe('main', () => {
   });
 
   it('forbids frames from navigating away, on the page that embeds them', async () => {
-    expect((await get('/')).headers.get('content-security-policy')).toBe("frame-src 'none'");
+    expect((await get('/')).headers.get('content-security-policy')).toBe(`frame-src ${new URL(drums.url).origin}/map/`);
   });
 
   it('refuses a port that is taken', async () => {

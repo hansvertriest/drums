@@ -12,13 +12,13 @@ export const qualifiedToolName = (id: string) => `${qualifiedPrefix}${id}`;
 const toolName = (name: string) => (name.startsWith(qualifiedPrefix) ? name.slice(qualifiedPrefix.length) : name);
 
 /** A line for the Steps view. Big values like a whole artifact's HTML are cut short. */
-function summarize(input: unknown): string {
+export function summarize(input: unknown, length = SUMMARY_LENGTH): string {
   if (typeof input !== 'object' || input === null) return '';
   return Object.entries(input)
     .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
     .join(' · ')
     .replace(/\s+/g, ' ')
-    .slice(0, SUMMARY_LENGTH);
+    .slice(0, length);
 }
 
 function fromAssistant(message: Extract<SDKMessage, { type: 'assistant' }>): AgentEvent[] {
@@ -39,6 +39,9 @@ function fromResult(message: Extract<SDKMessage, { type: 'result' }>): AgentEven
 /** Everything drums cares about in the SDK's stream. All SDK message shapes stay in this file. */
 export function toAgentEvents(message: SDKMessage): AgentEvent[] {
   if (message.type === 'system' && message.subtype === 'init') return [{ type: 'session', sessionId: message.session_id }];
+  if (message.type === 'system' && message.subtype === 'permission_denied') {
+    return [{ type: 'step', tool: 'denied', summary: `${toolName(message.tool_name)}: ${message.decision_reason ?? 'refused by the permission check'}`.slice(0, SUMMARY_LENGTH) }];
+  }
   if (message.type === 'assistant') return fromAssistant(message);
   if (message.type === 'result') return [fromResult(message)];
   return [];

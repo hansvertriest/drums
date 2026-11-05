@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { Answer } from './artifact.js';
+import { CheckpointRepo } from './branch-map.js';
 import { Focus } from './focus.js';
-import { AgentId, ArtifactId, VersionNumber } from './ids.js';
+import { AgentId, ArtifactId, RepoName, VersionNumber } from './ids.js';
 
 const Base = z.object({
   /** Position in the workspace's feed: `posts/0007.json`. */
@@ -25,6 +26,16 @@ export const VersionPost = Base.extend({
   version: VersionNumber,
 });
 
+/** A version of the branch map: what changed across the repos it touched. */
+export const CheckpointPost = Base.extend({
+  kind: z.literal('checkpoint'),
+  title: z.string(),
+  message: z.string(),
+  artifact: ArtifactId,
+  version: VersionNumber,
+  repos: z.array(CheckpointRepo),
+});
+
 /** What the user typed in the composer. */
 export const MessagePost = Base.extend({
   kind: z.literal('message'),
@@ -45,10 +56,12 @@ export const FeedbackPost = Base.extend({
     }),
   ),
   overall: z.string().optional(),
+  /** Review comments on code, as Markdown. */
+  code: z.array(z.object({ repo: RepoName, comments: z.number().int().nonnegative(), markdown: z.string() })).optional(),
 });
 
-/** A thread entry. `checkpoint` joins with M3. */
-export const Post = z.discriminatedUnion('kind', [NotePost, VersionPost, MessagePost, FeedbackPost]);
+/** A thread entry. */
+export const Post = z.discriminatedUnion('kind', [NotePost, VersionPost, CheckpointPost, MessagePost, FeedbackPost]);
 export type Post = z.infer<typeof Post>;
 
 /** A post before the store gives it its place in the feed. */

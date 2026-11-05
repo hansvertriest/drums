@@ -8,4 +8,8 @@ export interface ArtifactKindDefinition {
   renderer: string;
   /** Throws with a message for the agent if the content is not a valid version of this kind. */
   validate(content: string): void;
+  /** It has something to show before its first version, so it is listed from the start. */
+  showsWithoutVersions?: boolean;
+  /** Versions only come from drums: `artifact_update` is refused, with this as the reason. */
+  managed?: string;
 }

@@ -26,6 +26,7 @@ export function fakeBackend() {
     return {
       events: events(),
       send: async (text: string) => void session.received.push(text),
+      respondPermission: async () => true,
       interrupt: async () => session.emit({ type: 'turn.ended', outcome: 'error', error: 'interrupted' }),
       close() {
         closed = true;
