@@ -2,7 +2,7 @@ import { InvalidError, NotFoundError } from '@drums/core';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { isOurHost } from '../guard.js';
+import { browserOrigin, isOurHost } from '../guard.js';
 import type { RouteGroup } from '../route-group.js';
 import { repoParam, workspaceParam } from '../validate.js';
 
@@ -34,8 +34,8 @@ const json = (body: string) => new Response(body, { headers: { 'content-type': '
  * only lets it talk to this one repo's map. In the other direction, what stands between another
  * site and this data is the secret in the path, plus `Host` against DNS rebinding.
  */
-const onlyWithToken = (token: string, host: string): MiddlewareHandler => async (c, next) => {
-  if (c.req.param('token') !== token || !isOurHost(c.req.header('host'), host)) return c.text('Not found', 404);
+const onlyWithToken = (token: string, host: string, allowedHosts: readonly string[]): MiddlewareHandler => async (c, next) => {
+  if (c.req.param('token') !== token || !isOurHost(c.req.header('host'), host, allowedHosts)) return c.text('Not found', 404);
   await next();
   c.res.headers.set('Access-Control-Allow-Origin', 'null');
   return undefined;
@@ -59,11 +59,11 @@ const viewerCsp = (mapUrl: string, appUrl: string) =>
 /** What dyffle's viewer expects of a live server (its `LiveSource`), for one repo's session. */
 export const mapViewerRoutes: RouteGroup = {
   path: '/map',
-  create({ services, mapToken, host }) {
+  create({ services, mapToken, host, allowedHosts }) {
     const source = (c: Parameters<MiddlewareHandler>[0]) => services.code.mapSource(workspaceParam(c), repoParam(c));
     const at = '/:token/:ws/:repo';
     return new Hono()
-      .use(`${at}/*`, onlyWithToken(mapToken, host))
+      .use(`${at}/*`, onlyWithToken(mapToken, host, allowedHosts))
       .options(`${at}/*`, (c) => {
         c.header('Access-Control-Allow-Methods', 'GET, PUT');
         c.header('Access-Control-Allow-Headers', 'content-type');
@@ -71,7 +71,7 @@ export const mapViewerRoutes: RouteGroup = {
       })
       .get(`${at}/`, async (c) => {
         await source(c);
-        const appUrl = `http://${c.req.header('host')}`;
+        const appUrl = browserOrigin(c.req.header('host'), c.req.header('x-forwarded-proto'), allowedHosts);
         c.header('Content-Security-Policy', viewerCsp(`${appUrl}${new URL(c.req.url).pathname}`, appUrl));
         c.header('Cache-Control', 'no-store');
         return c.html(services.code.viewerHtml());

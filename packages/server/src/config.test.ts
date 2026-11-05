@@ -29,6 +29,11 @@ describe('loadConfig', () => {
     expect(loadConfig({ home }, { DRUMS_ROLE_PICKER_MODEL: 'env-model' }).models.rolePicker).toBe('env-model');
   });
 
+  it('reads extra allowed hosts from the environment, with none by default', () => {
+    expect(loadConfig({ home }, {}).allowedHosts).toEqual([]);
+    expect(loadConfig({ home }, { DRUMS_ALLOWED_HOSTS: ' Box.example , ,other.example' }).allowedHosts).toEqual(['box.example', 'other.example']);
+  });
+
   it('lets the environment and then options win', () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ workspacesRoot: '/file' }));
     const env = { DRUMS_HOME: home, DRUMS_WORKSPACES_ROOT: '/env', DRUMS_AGENT_MODEL: 'env-model' };

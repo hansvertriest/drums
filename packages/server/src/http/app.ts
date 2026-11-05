@@ -1,7 +1,7 @@
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { onError } from './errors.js';
-import { isOurHost, sameOriginOnly } from './guard.js';
+import { browserOrigin, isOurHost, sameOriginOnly } from './guard.js';
 import type { HttpDeps, RouteGroup } from './route-group.js';
 import { agentRoutes } from './routes/agents.js';
 import { answerRoutes } from './routes/answers.js';
@@ -41,6 +41,8 @@ export interface AppOptions {
   webRoot: string;
   /** The interface the server is bound to. */
   host: string;
+  /** Extra hostnames this server answers to, for a proxy in front of it. */
+  allowedHosts: readonly string[];
 }
 
 /**
@@ -49,12 +51,13 @@ export interface AppOptions {
  * inherit this, so it must stay limited to frames. Only the map's frames may load, and without
  * its secret path an artifact gets nothing there.
  */
-const appCsp = (host: string | undefined, boundHost: string) => `frame-src ${isOurHost(host, boundHost) ? `http://${host}/map/` : "'none'"}`;
+const appCsp = (host: string | undefined, forwardedProto: string | undefined, boundHost: string, allowedHosts: readonly string[]) =>
+  `frame-src ${isOurHost(host, boundHost, allowedHosts) ? `${browserOrigin(host, forwardedProto, allowedHosts)}/map/` : "'none'"}`;
 
-export function createApp(deps: HttpDeps, { webRoot, host }: AppOptions): Hono {
+export function createApp(deps: HttpDeps, { webRoot, host, allowedHosts }: AppOptions): Hono {
   const app = new Hono();
   app.onError(onError);
-  app.use('/api/*', sameOriginOnly(host));
+  app.use('/api/*', sameOriginOnly(host, allowedHosts));
   for (const group of routeGroups) {
     const routes = group.create(deps);
     routes.onError(onError);
@@ -63,7 +66,7 @@ export function createApp(deps: HttpDeps, { webRoot, host }: AppOptions): Hono {
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
   app.use('*', async (c, next) => {
     await next();
-    c.header('Content-Security-Policy', appCsp(c.req.header('host'), host));
+    c.header('Content-Security-Policy', appCsp(c.req.header('host'), c.req.header('x-forwarded-proto'), host, allowedHosts));
   });
   app.use('*', serveStatic({ root: webRoot }));
   app.get('*', serveStatic({ root: webRoot, path: 'index.html' }));

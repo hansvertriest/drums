@@ -25,6 +25,8 @@ export interface DrumsConfig {
   baseCacheDir: string;
   models: { agent: string; rolePicker: string };
   sessionGraceMs: number;
+  /** Extra hostnames the server answers to, for a proxy in front of it. */
+  allowedHosts: string[];
 }
 
 export interface ConfigOverrides {
@@ -62,5 +64,6 @@ export function loadConfig(overrides: ConfigOverrides = {}, env: Env = process.e
       rolePicker: env.DRUMS_ROLE_PICKER_MODEL ?? file.models?.rolePicker ?? DEFAULT_MODEL,
     },
     sessionGraceMs: overrides.sessionGraceMs ?? file.sessionGraceMs ?? DEFAULT_SESSION_GRACE_MS,
+    allowedHosts: (env.DRUMS_ALLOWED_HOSTS ?? '').split(',').flatMap((host) => host.trim().toLowerCase() || []),
   };
 }

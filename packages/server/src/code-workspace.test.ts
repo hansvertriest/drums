@@ -13,6 +13,8 @@ const dirs = tempDirs();
 const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => (hasRepos ? [{ role: 'coder', instruction: goal }] : []) };
 const fake = fakeBackend();
 const PATH = process.env.PATH;
+const LISTED_NAME = 'box.example';
+const LISTED = `${LISTED_NAME}:8445`;
 let parent: string;
 let drums: RunningDrums;
 let repo: { path: string; origin?: string };
@@ -28,6 +30,7 @@ beforeAll(async () => {
   writeFileSync(join(bin, 'gh'), `#!/bin/sh\nprintf 'ARGS %s\\n' "$*" >> "${ghLog}"\ncat >> "${ghLog}"\nif [ "$1 $2" = "pr create" ]; then n=$(grep -c '^ARGS pr create' "${ghLog}"); echo "https://github.example/o/r/pull/$n"; fi\n`);
   chmodSync(join(bin, 'gh'), 0o755);
   process.env.PATH = `${bin}${delimiter}${PATH}`;
+  process.env.DRUMS_ALLOWED_HOSTS = LISTED_NAME;
   mkdirSync(join(parent, 'home'));
   writeFileSync(join(parent, 'home', 'config.json'), JSON.stringify({ projects: [repo.path, join(parent, 'other'), join(parent, 'not-a-repo')] }));
   mkdirSync(join(parent, 'web'));
@@ -38,6 +41,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await drums.stop();
   process.env.PATH = PATH;
+  delete process.env.DRUMS_ALLOWED_HOSTS;
   dirs.cleanup();
 });
 
@@ -63,6 +67,20 @@ const statusWithHost = (path: string, host: string) =>
     })
       .on('error', reject)
       .end();
+  });
+/** The status, the headers and the first bytes of an answer: enough for a stream that doesn't end. */
+const raw = (path: string, headers: Record<string, string>) =>
+  new Promise<{ status: number | undefined; csp: string | undefined; type: string | undefined; first: string }>((resolve, reject) => {
+    const { hostname, port } = new URL(drums.url);
+    const sent = request({ hostname, port, path, headers }, (response) => {
+      const done = (first: string) => {
+        resolve({ status: response.statusCode, csp: response.headers['content-security-policy'] as string | undefined, type: response.headers['content-type'], first });
+        sent.destroy();
+      };
+      response.once('data', (chunk: Buffer) => done(chunk.toString()));
+      response.once('end', () => done(''));
+    });
+    sent.on('error', reject).end();
   });
 const mapOf = async (ws: string) => MapState.parse(await (await get(`/api/workspaces/${ws}/map`)).json());
 const viewer = async (ws: string, repoName = 'shop') => (await mapOf(ws)).repos.find((r) => r.name === repoName)!.viewer!;
@@ -98,6 +116,55 @@ describe('creating', () => {
   it('rejects a branch that could be taken for an option', async () => {
     expect((await post('/api/workspaces', { goal: 'x', repos: [{ name: 'shop', base: 'main' }], branch: '--force' })).status).toBe(400);
     expect((await post('/api/workspaces', { goal: 'x', repos: [{ name: '../x', base: 'main' }] })).status).toBe(400);
+  });
+});
+
+describe('behind a proxy on a listed host', () => {
+  const https = { 'x-forwarded-proto': 'https' };
+
+  it('answers the API with an https origin, and only its own', async () => {
+    expect((await raw('/api/workspaces', { host: LISTED, origin: `https://${LISTED}` })).status).toBe(200);
+    expect((await raw('/api/workspaces', { host: LISTED, origin: `http://${LISTED}` })).status).toBe(200);
+    expect((await raw('/api/workspaces', { host: LISTED, origin: 'https://evil.example' })).status).toBe(403);
+    expect((await raw('/api/workspaces', { host: LISTED, origin: `https://${LISTED_NAME}` })).status).toBe(403);
+    expect((await raw('/api/workspaces', { host: LISTED, origin: 'null' })).status).toBe(403);
+  });
+
+  it('still refuses a host that is not listed', async () => {
+    expect((await raw('/api/workspaces', { host: 'evil.example:8445', origin: 'https://evil.example:8445' })).status).toBe(403);
+    expect((await raw('/', { host: 'evil.example', ...https })).csp).toBe("frame-src 'none'");
+  });
+
+  it('keeps loopback to http, whatever the header says', async () => {
+    const { host } = new URL(drums.url);
+    expect((await raw('/api/workspaces', { host, origin: `https://${host}`, ...https })).status).toBe(403);
+    expect((await raw('/api/workspaces', { host, origin: `http://${host}`, ...https })).status).toBe(200);
+    expect((await raw('/', { host, ...https })).csp).toBe(`frame-src http://${host}/map/`);
+  });
+
+  it('lets the map frames load over https only if the proxy says so', async () => {
+    expect((await raw('/', { host: LISTED, ...https })).csp).toBe(`frame-src https://${LISTED}/map/`);
+    expect((await raw('/', { host: LISTED })).csp).toBe(`frame-src http://${LISTED}/map/`);
+  });
+
+  it('serves the viewer with a policy in https, and believes no header on other hosts', async () => {
+    const { ws } = await create('Viewer behind a proxy');
+    const url = await viewer(ws);
+    const { csp, status } = await raw(url, { host: LISTED, ...https });
+    expect(status).toBe(200);
+    expect(csp).toContain(`connect-src https://${LISTED}${url}`);
+    expect(csp).toContain(`frame-ancestors https://${LISTED}`);
+    const { host } = new URL(drums.url);
+    expect((await raw(url, { host, ...https })).csp).toContain(`frame-ancestors http://${host}`);
+    expect((await raw(url, { host: 'evil.example', ...https })).status).toBe(404);
+  });
+
+  it('streams events', async () => {
+    const { ws } = await create('Stream behind a proxy');
+    const { status, type, first } = await raw(`/api/workspaces/${ws}/stream`, { host: LISTED, ...https });
+    expect(status).toBe(200);
+    expect(type).toContain('text/event-stream');
+    expect(first).toContain('event: ready');
   });
 });
 

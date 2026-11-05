@@ -9,6 +9,8 @@ export interface HttpDeps {
   mapToken: string;
   /** The interface the server is bound to. */
   host: string;
+  /** Extra hostnames this server answers to, for a proxy in front of it. */
+  allowedHosts: readonly string[];
   events: EventBus;
   roles: RoleRegistry;
   tools: ToolRegistry;

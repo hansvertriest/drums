@@ -75,7 +75,7 @@ export async function main(options: DrumsOptions): Promise<RunningDrums> {
   });
   await services.agents.recover();
 
-  const app = createApp({ clock, ids, mapToken, host, events, roles, tools, artifactKinds, services }, { webRoot, host });
+  const app = createApp({ clock, ids, mapToken, host, allowedHosts: config.allowedHosts, events, roles, tools, artifactKinds, services }, { webRoot, host, allowedHosts: config.allowedHosts });
   const listening = await listen(app, port, host);
   origin = `http://${host}:${listening.port}`;
   return {
