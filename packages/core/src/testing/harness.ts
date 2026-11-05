@@ -60,6 +60,7 @@ export function createHarness() {
     turnChecks: createTurnCheckRegistry(),
     rolePicker: picker,
     git: code.git,
+    dependencies: code.dependencies,
     pullRequests: code.pullRequests,
     projects: code.projects,
     codeReview: code.codeReview,

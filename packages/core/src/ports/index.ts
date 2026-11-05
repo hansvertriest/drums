@@ -1,6 +1,7 @@
 export type * from './agent-backend.js';
 export type * from './clock.js';
 export type * from './code-review.js';
+export type * from './dependencies.js';
 export type * from './git.js';
 export type * from './ids.js';
 export type * from './projects.js';

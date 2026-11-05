@@ -1,4 +1,5 @@
 import type { CodeChange, CodeReview, CodeReviewEventType, CodeReviewSession, ImpactResult, OpenSessionRequest, PendingReview } from '../ports/code-review.js';
+import type { Dependencies } from '../ports/dependencies.js';
 import type { BranchChanges, Git, WorktreeRequest } from '../ports/git.js';
 import type { Project, Projects } from '../ports/projects.js';
 import type { PullRequests } from '../ports/pull-requests.js';
@@ -16,6 +17,7 @@ export function createFakeCode() {
     projectList: [{ name: 'api', path: '/repos/api' }, { name: 'web', path: '/repos/web' }] as Project[],
     worktrees: [] as WorktreeRequest[],
     removed: [] as string[],
+    installs: [] as string[],
     pushes: [] as Array<{ worktree: string; branch: string }>,
     commits: [] as Array<{ worktree: string; message: string }>,
     opened: [] as Array<{ worktree: string; base: string; head: string; title: string; body: string; number: number }>,
@@ -30,6 +32,7 @@ export function createFakeCode() {
     pending: new Map<string, PendingReview>(),
     failAdd: undefined as string | undefined,
     failOpen: undefined as string | undefined,
+    failInstall: undefined as string | undefined,
     failPr: undefined as string | undefined,
   };
 
@@ -48,6 +51,13 @@ export function createFakeCode() {
       return true;
     },
     push: async (worktree, branch) => void state.pushes.push({ worktree, branch }),
+  };
+
+  const dependencies: Dependencies = {
+    async install(worktree) {
+      if (state.failInstall && worktree.endsWith(state.failInstall)) throw new Error('npm is not installed');
+      state.installs.push(worktree);
+    },
   };
 
   const pullRequests: PullRequests = {
@@ -107,5 +117,5 @@ export function createFakeCode() {
     },
   };
 
-  return { ...state, state, git, pullRequests, projects, codeReview };
+  return { ...state, state, git, dependencies, pullRequests, projects, codeReview };
 }

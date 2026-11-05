@@ -18,7 +18,7 @@ Your working directory is the workspace folder. Each attached repo is a folder i
 
 Work in small steps. After each step:
 
-1. Run the tests that cover it. A new worktree has no dependencies installed, so install them from the lockfile first if the tests need them.
+1. Run the tests that cover it. Dependencies are installed when the worktree is created; if that failed, install them from the lockfile.
 2. Call impact with no target, and fix what it shows you broke.
 3. Call checkpoint.
 

@@ -46,8 +46,37 @@ describe('attaching repos', () => {
     await expect(harness.services.workspaces.create({ goal: 'x', repos })).rejects.toThrow(/cannot add web/);
     expect(harness.code.state.removed).toHaveLength(1);
     expect(harness.code.state.removed[0]).toMatch(/\/api$/);
+    expect(harness.code.state.installs).toEqual([]);
     expect(harness.code.state.sessions).toHaveLength(0);
     expect(await harness.services.workspaces.list()).toEqual([]);
+  });
+
+  it('installs dependencies before anything can open a session', async () => {
+    const harness = createHarness();
+    const { install } = harness.code.dependencies;
+    const during: Array<{ sessions: number; listed: number }> = [];
+    harness.code.dependencies.install = async (worktree) => {
+      during.push({ sessions: harness.code.state.sessions.length, listed: (await harness.services.workspaces.list()).length });
+      await install(worktree);
+    };
+    const { ws } = await codeWorkspace(harness);
+    expect(during).toEqual([
+      { sessions: 0, listed: 0 },
+      { sessions: 0, listed: 0 },
+    ]);
+    expect(harness.code.state.installs).toEqual([`/workspaces/${ws}/api`, `/workspaces/${ws}/web`]);
+    expect(harness.code.state.sessions).toHaveLength(2);
+  });
+
+  it('opens the session anyway when an install fails, and says so naming the repo', async () => {
+    const harness = createHarness();
+    harness.code.state.failInstall = 'web';
+    const { ws, state } = await codeWorkspace(harness);
+    expect(harness.code.state.sessions.map((s) => s.request.worktree)).toEqual([`/workspaces/${ws}/api`, `/workspaces/${ws}/web`]);
+    expect(harness.code.state.removed).toEqual([]);
+    expect(state.workspace.agents).toHaveLength(1);
+    expect(state.steps.filter((s) => s.kind === 'error')).toMatchObject([{ agent: state.workspace.agents[0]!.id, text: 'Could not install the dependencies of web: npm is not installed' }]);
+    expect(harness.seen).toContainEqual({ type: 'agent.step', workspace: ws, step: expect.objectContaining({ kind: 'error' }) });
   });
 
   it('refuses a repo that is not a project, and the same repo twice', async () => {

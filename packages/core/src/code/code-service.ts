@@ -2,6 +2,7 @@ import type { MapState, ProjectList, Workspace, WorkspaceId, WorkspaceRepo } fro
 import { ConflictError, InvalidError, NotFoundError } from '../errors.js';
 import type { BranchChanges, Git } from '../ports/git.js';
 import type { CodeReview, ImpactResult, MapSource, PendingReview } from '../ports/code-review.js';
+import type { Dependencies } from '../ports/dependencies.js';
 import type { Projects } from '../ports/projects.js';
 import type { Store } from '../ports/store.js';
 import type { Checkpoints } from './checkpoints.js';
@@ -16,8 +17,16 @@ export interface PendingCode extends PendingReview {
 
 export interface CodeService extends Checkpoints {
   projects(): Promise<ProjectList>;
-  /** Worktrees for a new workspace: all or none. Sessions start with `openAll`, once the workspace exists. */
-  attach(workspace: WorkspaceId, requested: ReadonlyArray<{ name: string; base: string }>, branch: string): Promise<WorkspaceRepo[]>;
+  /**
+   * Worktrees for a new workspace, all or none, with their dependencies installed. An install that
+   * fails doesn't fail this: it comes back to be reported. Sessions start with `openAll`, once the
+   * workspace exists, so nothing can open one before the installs are done.
+   */
+  attach(
+    workspace: WorkspaceId,
+    requested: ReadonlyArray<{ name: string; base: string }>,
+    branch: string,
+  ): Promise<{ repos: WorkspaceRepo[]; failedInstalls: Array<{ repo: string; error: string }> }>;
   /** Starts the sessions now, so the first checkpoint measures from here. Those that can't run try again on demand. */
   openAll(workspace: WorkspaceId): Promise<void>;
   impact(workspace: WorkspaceId, target?: string): Promise<{ found: boolean; text: string }>;
@@ -36,6 +45,7 @@ export interface CodeService extends Checkpoints {
 export interface CodeServiceDeps {
   store: Store;
   git: Git;
+  dependencies: Dependencies;
   projects: Projects;
   codeReview: CodeReview;
   sessions: KeptSessions;
@@ -46,7 +56,7 @@ const NONE: BranchChanges = { files: 0, additions: 0, deletions: 0 };
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createCodeService(deps: CodeServiceDeps): CodeService {
-  const { store, git, projects, codeReview, sessions, checkpoints } = deps;
+  const { store, git, dependencies, projects, codeReview, sessions, checkpoints } = deps;
 
   const load = async (id: WorkspaceId) => {
     const workspace = await store.getWorkspace(id);
@@ -98,19 +108,27 @@ export function createCodeService(deps: CodeServiceDeps): CodeService {
       const added: Array<{ source: string; name: string; branch?: string | undefined }> = [];
       /** What "changed since" is measured from, until the first checkpoint. */
       const contents = new Map<string, string>();
+      const failedInstalls: Array<{ repo: string; error: string }> = [];
       try {
         for (const { name, base, source } of wanted) {
           const path = sessions.worktree(id, name);
           const { createdBranch } = await git.addWorktree({ repo: source, path, branch, base });
           added.push({ source, name, branch: createdBranch ? branch : undefined });
-          contents.set(name, await git.contentId(path));
         }
+        await Promise.all(
+          wanted.map(({ name }) =>
+            dependencies.install(sessions.worktree(id, name)).catch((error: unknown) => void failedInstalls.push({ repo: name, error: message(error) })),
+          ),
+        );
+        // After the installs: what they leave behind is not a change anyone made.
+        for (const { name } of wanted) contents.set(name, await git.contentId(sessions.worktree(id, name)));
       } catch (error) {
         // Dyffle has made nothing to clean up yet: sessions only start once every worktree exists.
         await undo(id, added);
         throw error instanceof ConflictError ? error : new ConflictError(message(error));
       }
-      return wanted.map(({ name, base, source }) => ({ name, base, source, delivered: [], checkpointed: contents.get(name) as string }));
+      const repos = wanted.map(({ name, base, source }) => ({ name, base, source, delivered: [], checkpointed: contents.get(name) as string }));
+      return { repos, failedInstalls };
     },
     async openAll(id) {
       const { repos } = await load(id);

@@ -12,6 +12,7 @@ import { createFeedbackService, type FeedbackService } from './feedback/feedback
 import type { AgentBackend } from './ports/agent-backend.js';
 import type { Clock } from './ports/clock.js';
 import type { CodeReview } from './ports/code-review.js';
+import type { Dependencies } from './ports/dependencies.js';
 import type { Git } from './ports/git.js';
 import type { Ids } from './ports/ids.js';
 import type { Projects } from './ports/projects.js';
@@ -35,6 +36,7 @@ export interface ServiceDeps {
   turnChecks: TurnCheckRegistry;
   rolePicker: RolePicker;
   git: Git;
+  dependencies: Dependencies;
   pullRequests: PullRequests;
   projects: Projects;
   codeReview: CodeReview;
@@ -61,7 +63,7 @@ export interface Services {
 /** The services need each other in rings (artifacts → feedback → agents → artifacts, agents → code → agents), so one place ties them. */
 export function createServices(deps: ServiceDeps): Services {
   const { store, backend, events, clock, ids, roles, tools, artifactKinds, turnChecks, rolePicker, firstRole } = deps;
-  const { git, pullRequests, projects, codeReview, viewerUrl, sessionGraceMs } = deps;
+  const { git, dependencies, pullRequests, projects, codeReview, viewerUrl, sessionGraceMs } = deps;
   const posts = createPostService({ store, events, clock });
   const artifacts = createArtifactService({
     store,
@@ -74,7 +76,7 @@ export function createServices(deps: ServiceDeps): Services {
   const agents = createAgentService({ store, backend, events, clock, ids, roles, tools, posts, artifacts, rolePicker, turnChecks, firstRole, code: () => code });
   const sessions = createSessionKeeper(createCodeSessions({ codeReview, store, events, viewerUrl }), { store, events, clock, graceMs: sessionGraceMs });
   const checkpoints = createCheckpoints({ store, git, sessions, artifacts, namer: agents.namer });
-  const code = createCodeService({ store, git, projects, codeReview, sessions, checkpoints });
+  const code = createCodeService({ store, git, dependencies, projects, codeReview, sessions, checkpoints });
   const prs = createPrService({ store, events, git, pullRequests, sessions, agents: () => agents });
   const feedback = createFeedbackService({ store, events, clock, artifacts, posts, agents: () => agents, code: () => code, roles });
   const workspaces = createWorkspaceService({ store, clock, ids, agents, artifacts, posts, feedback, code, roles, rolePicker, firstRole });

@@ -26,6 +26,8 @@ import type { TurnCheckRegistry } from './turn-checks/registry.js';
 export interface AgentService {
   /** Adds an agent of this role to the workspace and gives it its first message, after an overview. */
   start(workspace: WorkspaceId, role: RoleId, instruction: string): Promise<Agent>;
+  /** A line in this agent's thread about something that went wrong around it. */
+  reportError(workspace: WorkspaceId, agent: AgentId, text: string): Promise<void>;
   /** Add agent: drums picks the role from the instruction. */
   add(workspace: WorkspaceId, instruction: string): Promise<Agent>;
   /** A message from the composer: it shows in the thread and goes to the agent. Refused while the agent runs. */
@@ -129,6 +131,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
       await sessions.deliver(workspace, id, message);
       return agent;
     },
+    reportError: (workspace, agent, text) => records.addError(workspace, agent, text),
     async add(workspace, instruction) {
       const [view, found] = await Promise.all([overview(workspace), store.getWorkspace(workspace)]);
       const hasRepos = (found?.repos.length ?? 0) > 0;

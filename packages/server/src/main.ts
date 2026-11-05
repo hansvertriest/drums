@@ -3,6 +3,7 @@ import { createClaudeBackend } from './adapters/claude/backend.js';
 import { createClaudeRolePicker } from './adapters/claude/role-picker.js';
 import { createDyffleCodeReview } from './adapters/dyffle/code-review.js';
 import { createFsStore } from './adapters/fs-store/store.js';
+import { createLockfileDependencies } from './adapters/dependencies/lockfile.js';
 import { createExecaGit } from './adapters/git/git.js';
 import { createGhPullRequests } from './adapters/git/github.js';
 import { createSystemClock } from './adapters/system/clock.js';
@@ -64,6 +65,7 @@ export async function main(options: DrumsOptions): Promise<RunningDrums> {
     // The key goes to the SDK's client and nowhere else. Without one, the picker runs on the machine's Claude Code login.
     rolePicker: rolePicker ?? createClaudeRolePicker({ model: config.models.rolePicker, apiKey: process.env.ANTHROPIC_API_KEY }),
     git: git ?? createExecaGit(),
+    dependencies: createLockfileDependencies(),
     pullRequests: pullRequests ?? createGhPullRequests(),
     projects: createConfigProjects(config.projects),
     codeReview: codeReview ?? createDyffleCodeReview({ baseCacheDir: config.baseCacheDir }),

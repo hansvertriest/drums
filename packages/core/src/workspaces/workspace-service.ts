@@ -44,7 +44,9 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
   const pick = (goal: string, hasRepos: boolean) => pickRoles({ picker: rolePicker, roles, fallback: firstRole }, { goal, hasRepos });
 
   const startAll = async (id: WorkspaceId, picks: readonly RolePick[]) => {
-    for (const { role, instruction } of picks) await agents.start(id, role, instruction);
+    const started = [];
+    for (const { role, instruction } of picks) started.push(await agents.start(id, role, instruction));
+    return started;
   };
 
   const state: WorkspaceService['state'] = async (id) => {
@@ -69,12 +71,17 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
         return state(id);
       }
       const name = branch ?? `drums/${id}`;
-      const repos = await code.attach(id, requested, name);
+      const { repos, failedInstalls } = await code.attach(id, requested, name);
       await store.createWorkspace({ id, goal, createdAt, agents: [], repos, branch: name, permissions: [], nudges: {} });
       await artifacts.createEmpty(id, { title: branchMapArtifactKind.name, kind: branchMapArtifactKind.id });
       const picks = await pick(goal, true);
       await code.openAll(id);
-      await startAll(id, picks);
+      const [first] = await startAll(id, picks);
+      if (first) {
+        for (const { repo, error } of failedInstalls) {
+          await agents.reportError(id, first.id, `Could not install the dependencies of ${repo}: ${error}`);
+        }
+      }
       return state(id);
     },
     async list() {
