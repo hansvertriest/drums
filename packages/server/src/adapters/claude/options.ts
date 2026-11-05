@@ -2,6 +2,7 @@ import { createSdkMcpServer, tool, type CanUseTool, type HookCallback, type Opti
 import type { AgentSessionOptions, SystemAccess } from '@drums/core';
 import { toMcpTools } from '../../mcp/sdk-tools.js';
 import { qualifiedToolName, SERVER_NAME } from './messages.js';
+import { boundReads, READ_TOOLS } from './read-bounds.js';
 
 /** What `shell-and-files` means in the SDK's terms. No web, no subagents, no other built-in. */
 const SHELL_AND_FILE_TOOLS = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'];
@@ -30,7 +31,7 @@ export interface PermissionChoices {
   classifier: boolean;
 }
 
-const BY_ACCESS: Record<SystemAccess, (allowed: string[], choices: PermissionChoices) => Partial<Options>> = {
+const BY_ACCESS: Record<SystemAccess, (allowed: string[], choices: PermissionChoices, cwd: string) => Partial<Options>> = {
   // Exactly the role's tools. `tools: []` takes every built-in out of the session, including
   // subagents and tool search; `dontAsk` and `permissionPrompts: 'none'` turn whatever would prompt into a denial.
   'tools-only': (allowed) => ({
@@ -38,6 +39,14 @@ const BY_ACCESS: Record<SystemAccess, (allowed: string[], choices: PermissionCho
     permissionMode: 'dontAsk',
     permissionPrompts: 'none',
     hooks: { PreToolUse: [{ hooks: [denyOtherTools(allowed)] }] },
+  }),
+  // As above, plus the read tools. Approved up front, so `boundReads` is what keeps them in the workspace folder.
+  'read-files': (allowed, _choices, cwd) => ({
+    tools: READ_TOOLS,
+    allowedTools: [...allowed, ...READ_TOOLS],
+    permissionMode: 'dontAsk',
+    permissionPrompts: 'none',
+    hooks: { PreToolUse: [{ hooks: [denyOtherTools([...allowed, ...READ_TOOLS]), boundReads(cwd)] }] },
   }),
   // A shell and file tools. `auto` has a classifier approve or deny each call, and what it can't decide
   // comes to `canUseTool`. An account or model without `auto` starts in `default` instead, where everything
@@ -64,7 +73,7 @@ export function sessionOptions(session: AgentSessionOptions, model: string, choi
     allowedTools: allowed,
     settingSources: [],
     strictMcpConfig: true,
-    ...BY_ACCESS[session.access](allowed, choices),
+    ...BY_ACCESS[session.access](allowed, choices, session.cwd),
     mcpServers: {
       [SERVER_NAME]: createSdkMcpServer({
         name: SERVER_NAME,

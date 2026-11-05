@@ -25,7 +25,7 @@ describe('built-in registries', () => {
     }
   });
 
-  it('hold the roles, and only the one that needs a repo has more than drums tools', () => {
+  it('hold the roles, and only the one that needs a repo can change anything', () => {
     const registry = createRoleRegistry();
     expect(registry.list().map((role) => role.id)).toEqual(['scoper', 'researcher', 'designer', 'coder', 'reviewer']);
     const [coders, others] = [registry.list().filter((role) => role.needsRepo), registry.list().filter((role) => !role.needsRepo)];
@@ -33,7 +33,9 @@ describe('built-in registries', () => {
     expect(coders[0]!.tools).toEqual(expect.arrayContaining(['checkpoint', 'impact']));
     for (const role of others) {
       expect(role.tools).toEqual(['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed']);
-      expect(role.access).toBeUndefined();
+      expect(role.access).toBe('read-files');
+      expect(role.prompt).toContain('read and search the code');
+      expect(role.prompt).not.toContain('no files');
     }
   });
 
