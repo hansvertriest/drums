@@ -1,4 +1,4 @@
-import type { Agent, AgentId, Focus, PermissionDecision, RoleId, WorkspaceId } from '@drums/protocol';
+import type { Agent, AgentId, Focus, NudgeCounts, PermissionDecision, RoleId, WorkspaceId } from '@drums/protocol';
 import type { ArtifactService } from '../artifacts/artifact-service.js';
 import type { CodeService } from '../code/code-service.js';
 import type { EventBus } from '../events/event-bus.js';
@@ -20,6 +20,8 @@ import { uniqueAgentName } from './agent-name.js';
 import { createAgentPermissions } from './agent-permissions.js';
 import { createAgentRecords } from './agent-records.js';
 import { createAgentSessions } from './agent-sessions.js';
+import { createEndOfTurn } from './turn-checks/end-of-turn.js';
+import type { TurnCheckRegistry } from './turn-checks/registry.js';
 
 export interface AgentService {
   /** Adds an agent of this role to the workspace and gives it its first message, after an overview. */
@@ -44,6 +46,8 @@ export interface AgentService {
   settleReviews(workspace: WorkspaceId): Promise<void>;
   /** How tools name agents to each other. Ids mean nothing to a model. */
   namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
+  /** How often the end-of-turn checks had to nudge each role, over all workspaces. */
+  nudges(): Promise<NudgeCounts>;
   /**
    * After a restart nothing is running, whatever the files say. A permission request whose session
    * is gone can't be answered: its row says so, and the agent goes idle instead of waiting forever.
@@ -63,6 +67,7 @@ export interface AgentServiceDeps {
   posts: PostService;
   artifacts: ArtifactService;
   rolePicker: RolePicker;
+  turnChecks: TurnCheckRegistry;
   /** Supplied lazily: `checkpoint` names its author through this service. */
   code: () => CodeService;
   /** What Add agent falls back on when the picker returns nothing usable. */
@@ -70,16 +75,19 @@ export interface AgentServiceDeps {
 }
 
 export function createAgentService(deps: AgentServiceDeps): AgentService {
-  const { store, backend, events, clock, ids, roles, tools, posts, artifacts, rolePicker, firstRole } = deps;
+  const { store, backend, events, clock, ids, roles, tools, posts, artifacts, rolePicker, turnChecks, firstRole } = deps;
   const records = createAgentRecords({ store, events, clock });
   const claims = createAgentClaims();
   const permissions = createAgentPermissions({ store, events, clock });
+  const endOfTurn = createEndOfTurn({ checks: turnChecks, store, clock, roles, posts, records, services: () => ({ code: deps.code() }) });
   const sessions = createAgentSessions({
     backend,
     clock,
     records,
     claims,
     permissions,
+    endOfTurn,
+    overview: (workspace, agent) => overview(workspace, agent),
     options(workspace, agent) {
       const role = roles.get(agent.role);
       const ctx = {
@@ -172,6 +180,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
         }
       }
     },
+    nudges: endOfTurn.counts,
     closeAll: sessions.closeAll,
   };
   return service;

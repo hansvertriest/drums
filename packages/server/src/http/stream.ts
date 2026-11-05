@@ -31,6 +31,8 @@ export const streamRoutes: RouteGroup = {
           if (event.workspace === workspace) enqueue({ data: JSON.stringify(event) });
           if (SUMMARY_EVENTS.includes(event.type)) enqueue({ event: WORKSPACES_CHANGED, data: '' });
         });
+        // A connected page is what "open" means (spec §7): the workspace keeps its code sessions until a grace period after this ends.
+        const leave = services.code.view(workspace);
         const heartbeat = setInterval(() => enqueue({ event: 'ping', data: '' }), HEARTBEAT_MS);
         let ended = false;
         stream.onAbort(() => {
@@ -45,6 +47,7 @@ export const streamRoutes: RouteGroup = {
             else await new Promise<void>((resolve) => (wake = resolve));
           }
         } finally {
+          leave();
           clearInterval(heartbeat);
           unsubscribe();
         }

@@ -1,5 +1,6 @@
-import { createArtifactKindRegistry, createEventBus, createRoleRegistry, createServices, createToolRegistry, type AgentBackend, type CodeReview, type Git, type PullRequests } from '@drums/core';
+import { createArtifactKindRegistry, createEventBus, createRoleRegistry, createServices, createToolRegistry, createTurnCheckRegistry, type AgentBackend, type CodeReview, type Git, type PullRequests, type RolePicker } from '@drums/core';
 import { createClaudeBackend } from './adapters/claude/backend.js';
+import { createClaudeRolePicker } from './adapters/claude/role-picker.js';
 import { createDyffleCodeReview } from './adapters/dyffle/code-review.js';
 import { createFsStore } from './adapters/fs-store/store.js';
 import { createExecaGit } from './adapters/git/git.js';
@@ -7,7 +8,6 @@ import { createGhPullRequests } from './adapters/git/github.js';
 import { createSystemClock } from './adapters/system/clock.js';
 import { createConfigProjects } from './adapters/system/config-projects.js';
 import { createUuidIds } from './adapters/system/ids.js';
-import { createKeywordRolePicker } from './adapters/system/keyword-role-picker.js';
 import { loadConfig, type ConfigOverrides } from './config.js';
 import { createApp } from './http/app.js';
 import { listen } from './http/listen.js';
@@ -19,6 +19,8 @@ export interface DrumsOptions extends ConfigOverrides {
   webRoot: string;
   /** Replaces the Claude backend; tests use it so they never reach the model. */
   agentBackend?: AgentBackend;
+  /** Replaces the model call that picks roles; tests use it so they never reach the model. */
+  rolePicker?: RolePicker;
   /** Replaces `gh`; tests use it so they never reach a remote. */
   pullRequests?: PullRequests;
   /** Replace the adapters on git and dyffle. */
@@ -33,12 +35,12 @@ export interface RunningDrums {
 
 const DEFAULT_HOST = '127.0.0.1';
 
-/** A workspace without repos starts with this role until the role picker picks for new ones too (M4). Add agent falls back on it. */
+/** What drums starts when the role picker returns nothing usable (spec §4.4). */
 const FIRST_ROLE = 'scoper';
 
 /** The composition root: the one place that builds adapters, registries and services. */
 export async function main(options: DrumsOptions): Promise<RunningDrums> {
-  const { port, host = DEFAULT_HOST, webRoot, agentBackend, pullRequests, git, codeReview, ...overrides } = options;
+  const { port, host = DEFAULT_HOST, webRoot, agentBackend, rolePicker, pullRequests, git, codeReview, ...overrides } = options;
   const config = loadConfig(overrides);
   const clock = createSystemClock();
   const ids = createUuidIds();
@@ -58,13 +60,16 @@ export async function main(options: DrumsOptions): Promise<RunningDrums> {
     roles,
     tools,
     artifactKinds,
-    rolePicker: createKeywordRolePicker(),
+    turnChecks: createTurnCheckRegistry(),
+    // The key goes to the SDK's client and nowhere else. Without one, the picker runs on the machine's Claude Code login.
+    rolePicker: rolePicker ?? createClaudeRolePicker({ model: config.models.rolePicker, apiKey: process.env.ANTHROPIC_API_KEY }),
     git: git ?? createExecaGit(),
     pullRequests: pullRequests ?? createGhPullRequests(),
     projects: createConfigProjects(config.projects),
     codeReview: codeReview ?? createDyffleCodeReview({ baseCacheDir: config.baseCacheDir }),
     viewerUrl: (workspace, repo) => `${origin}/map/${mapToken}/${workspace}/${repo}/`,
     firstRole: FIRST_ROLE,
+    sessionGraceMs: config.sessionGraceMs,
   });
   await services.agents.recover();
 

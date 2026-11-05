@@ -8,10 +8,14 @@ const ConfigFile = z.object({
   /** The repos a workspace can attach, as paths. Their folder names are what the user sees. */
   projects: z.array(z.string().min(1)).optional(),
   workspacesRoot: z.string().min(1).optional(),
-  models: z.object({ agent: z.string().min(1).optional() }).optional(),
+  models: z.object({ agent: z.string().min(1).optional(), rolePicker: z.string().min(1).optional() }).optional(),
+  /** How long a workspace's code sessions outlast the last reason to keep them. */
+  sessionGraceMs: z.number().int().nonnegative().optional(),
 });
 
-const DEFAULT_AGENT_MODEL = 'claude-opus-5-5';
+const DEFAULT_MODEL = 'claude-opus-5-5';
+/** Long enough for a reload, a switch to another workspace and back, or a short loss of the connection. */
+const DEFAULT_SESSION_GRACE_MS = 60_000;
 
 export interface DrumsConfig {
   home: string;
@@ -19,12 +23,14 @@ export interface DrumsConfig {
   projects: string[];
   /** One folder for all worktrees' base indexes, so those of one commit share theirs. */
   baseCacheDir: string;
-  models: { agent: string };
+  models: { agent: string; rolePicker: string };
+  sessionGraceMs: number;
 }
 
 export interface ConfigOverrides {
   home?: string;
   workspacesRoot?: string;
+  sessionGraceMs?: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -42,7 +48,7 @@ function readConfigFile(path: string): z.infer<typeof ConfigFile> {
   return parsed.data;
 }
 
-/** Options win over the environment (`DRUMS_HOME`, `DRUMS_WORKSPACES_ROOT`, `DRUMS_AGENT_MODEL`), which wins over the file. */
+/** Options win over the environment (`DRUMS_HOME`, `DRUMS_WORKSPACES_ROOT`, `DRUMS_AGENT_MODEL`, `DRUMS_ROLE_PICKER_MODEL`), which wins over the file. */
 export function loadConfig(overrides: ConfigOverrides = {}, env: Env = process.env): DrumsConfig {
   const home = resolve(overrides.home ?? env.DRUMS_HOME ?? join(homedir(), '.drums'));
   const file = readConfigFile(join(home, 'config.json'));
@@ -51,6 +57,10 @@ export function loadConfig(overrides: ConfigOverrides = {}, env: Env = process.e
     workspacesRoot: resolve(overrides.workspacesRoot ?? env.DRUMS_WORKSPACES_ROOT ?? file.workspacesRoot ?? join(home, 'workspaces')),
     projects: (file.projects ?? []).map((path) => resolve(path)),
     baseCacheDir: join(home, 'dyffle-base'),
-    models: { agent: env.DRUMS_AGENT_MODEL ?? file.models?.agent ?? DEFAULT_AGENT_MODEL },
+    models: {
+      agent: env.DRUMS_AGENT_MODEL ?? file.models?.agent ?? DEFAULT_MODEL,
+      rolePicker: env.DRUMS_ROLE_PICKER_MODEL ?? file.models?.rolePicker ?? DEFAULT_MODEL,
+    },
+    sessionGraceMs: overrides.sessionGraceMs ?? file.sessionGraceMs ?? DEFAULT_SESSION_GRACE_MS,
   };
 }

@@ -33,7 +33,7 @@ function match(words: readonly string[], candidate: RoleCandidate): Match | unde
 /**
  * Picks by the words a role's `summary` shares with the request: the most words wins, and on
  * a tie the one the request names first. Returns nothing if no word matches, and `core` then
- * falls back. Stands in until the model call of M4; knows no role by name.
+ * falls back. Stands in for the model call in tests; knows no role by name.
  */
 export function createKeywordRolePicker(): RolePicker {
   return {

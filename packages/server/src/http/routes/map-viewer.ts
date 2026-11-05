@@ -90,7 +90,10 @@ export const mapViewerRoutes: RouteGroup = {
       })
       .get(`${at}/events`, async (c) => {
         const map = await source(c);
+        const workspace = workspaceParam(c);
         return streamSSE(c, async (stream) => {
+          // This stream hangs on one session object: as long as it is connected, that one must keep running.
+          const leave = services.code.view(workspace);
           const pending: Array<{ event: string; data: string }> = [];
           let wake = () => {};
           const unsubscribe = map.subscribe((event, data) => {
@@ -113,6 +116,7 @@ export const mapViewerRoutes: RouteGroup = {
               else await new Promise<void>((resolve) => (wake = resolve));
             }
           } finally {
+            leave();
             clearInterval(heartbeat);
             unsubscribe();
           }

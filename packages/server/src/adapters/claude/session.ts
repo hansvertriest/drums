@@ -20,7 +20,7 @@ function reportedMode(message: SDKMessage) {
  * One long-lived streaming query per agent: `send` starts a turn, a `result` message ends it.
  * Permission requests arrive beside the query's messages, so one queue carries both.
  */
-export function createClaudeSession(run: RunQuery): AgentSession {
+export function createClaudeSession(run: RunQuery, cwd: string): AgentSession {
   const input = createInputQueue<SDKUserMessage>();
   const output = createInputQueue<AgentEvent>();
   const { query, gate } = run({ prompt: input.iterable, emit: output.push });
@@ -30,7 +30,7 @@ export function createClaudeSession(run: RunQuery): AgentSession {
       for await (const message of query) {
         const mode = gate && reportedMode(message);
         for (const event of mode ? gate.observeMode(mode) : []) output.push(event);
-        for (const event of toAgentEvents(message)) output.push(event);
+        for (const event of toAgentEvents(message, cwd)) output.push(event);
       }
       output.close();
     } catch (error) {

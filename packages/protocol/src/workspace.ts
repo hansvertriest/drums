@@ -21,8 +21,14 @@ export const WorkspaceRepo = z.object({
   prBody: z.string().optional(),
   /** Marks of the review comments Send already delivered, so they go once. */
   delivered: z.array(z.string()).default([]),
+  /** Identifies the worktree's content at the last checkpoint: what "changed since" is measured from. */
+  checkpointed: z.string().optional(),
 });
 export type WorkspaceRepo = z.infer<typeof WorkspaceRepo>;
+
+/** How often each end-of-turn check had to nudge each role: role → check → count. */
+export const NudgeCounts = z.record(RoleId, z.record(z.string(), z.number().int().nonnegative()));
+export type NudgeCounts = z.infer<typeof NudgeCounts>;
 
 export const Workspace = z.object({
   id: WorkspaceId,
@@ -34,6 +40,7 @@ export const Workspace = z.object({
   branch: BranchName.optional(),
   /** Every permission request, answered or not: the thread shows them as rows. */
   permissions: z.array(PermissionRequest).default([]),
+  nudges: NudgeCounts.default({}),
 });
 export type Workspace = z.infer<typeof Workspace>;
 
@@ -47,6 +54,8 @@ export const WorkspaceSummary = z.object({
   status: WorkspaceStatus,
   /** The role that posted last, for the strip. */
   lastRole: RoleId.optional(),
+  /** Where the last post by an agent is in the feed, so the strip can tell there is news. */
+  lastPost: z.number().int().positive().optional(),
   /** Line counts of the branch, on code. */
   additions: z.number().int().nonnegative().optional(),
   deletions: z.number().int().nonnegative().optional(),

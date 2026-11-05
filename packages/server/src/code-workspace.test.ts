@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { delimiter, join } from 'node:path';
+import type { RolePicker } from '@drums/core';
 import { MapState, ProjectList, WorkspaceList, WorkspaceState } from '@drums/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { main, type RunningDrums } from './main.js';
@@ -9,6 +10,7 @@ import { createTempRepo, runGit, tempDirs, writeFile } from './testing/temp-repo
 
 /** A code workspace through the real HTTP layer, real git and real dyffle. The model and `gh` are fake, and origin is a local bare repo. */
 const dirs = tempDirs();
+const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => (hasRepos ? [{ role: 'coder', instruction: goal }] : []) };
 const fake = fakeBackend();
 const PATH = process.env.PATH;
 let parent: string;
@@ -30,7 +32,7 @@ beforeAll(async () => {
   writeFileSync(join(parent, 'home', 'config.json'), JSON.stringify({ projects: [repo.path, join(parent, 'other'), join(parent, 'not-a-repo')] }));
   mkdirSync(join(parent, 'web'));
   writeFileSync(join(parent, 'web', 'index.html'), '<title>drums</title>');
-  drums = await main({ port: 0, webRoot: join(parent, 'web'), home: join(parent, 'home'), workspacesRoot: join(parent, 'ws'), agentBackend: fake.backend });
+  drums = await main({ port: 0, webRoot: join(parent, 'web'), home: join(parent, 'home'), workspacesRoot: join(parent, 'ws'), agentBackend: fake.backend, rolePicker: pickCoder });
 });
 
 afterAll(async () => {
@@ -269,7 +271,7 @@ describe('restart', () => {
     await tool(session, 'checkpoint', { title: 'Before', message: 'm' });
     session.emit({ type: 'permission.requested', id: 'gone', tool: 'Bash', title: 'Run', detail: 'x' });
     await new Promise((resolve) => setTimeout(resolve, 30));
-    const again = await main({ port: 0, webRoot: join(parent, 'web'), home: join(parent, 'home'), workspacesRoot: join(parent, 'ws'), agentBackend: fake.backend });
+    const again = await main({ port: 0, webRoot: join(parent, 'web'), home: join(parent, 'home'), workspacesRoot: join(parent, 'ws'), agentBackend: fake.backend, rolePicker: pickCoder });
     try {
       const base = new URL(again.url);
       const state = WorkspaceState.parse(await (await fetch(new URL(`/api/workspaces/${ws}`, base))).json());

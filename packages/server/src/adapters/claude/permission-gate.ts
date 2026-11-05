@@ -1,25 +1,15 @@
-import { realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { CanUseTool, PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentEvent } from '@drums/core';
 import type { PermissionDecision } from '@drums/protocol';
+import { realLocation } from './file-writes.js';
 import { summarize } from './messages.js';
 
 const DETAIL_LENGTH = 2000;
 const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
 /** Git's, Claude's, dyffle's and drums' own files are no edit to approve without asking. */
 const GUARDED_FOLDERS = ['.git', '.claude', '.dyffle', '.drums'];
-
-/** The real location of a path that may not exist yet: its nearest existing parent, resolved, plus the rest. */
-function realLocation(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    const parent = dirname(path);
-    return parent === path ? path : resolve(realLocation(parent), relative(parent, path));
-  }
-}
 
 /** A file edit inside the workspace folder, following links, and not in a guarded folder. */
 export function isWorkspaceEdit(cwd: string, tool: string, input: Record<string, unknown>): boolean {

@@ -2,9 +2,11 @@ import type { PermissionRequest, Post, Step } from '@drums/protocol';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
-/** A list keyed by `seq`: an event that arrives twice, or after a reload, lands once. */
-function upsert<T extends { seq: number }>(list: T[], item: T): void {
-  if (!list.some((entry) => entry.seq === item.seq)) list.push(item);
+/** A list keyed by `seq`: an event that arrives twice, or after a reload, lands once. True if it was new. */
+function upsert<T extends { seq: number }>(list: T[], item: T): boolean {
+  if (list.some((entry) => entry.seq === item.seq)) return false;
+  list.push(item);
+  return true;
 }
 
 export const useThreads = defineStore('threads', () => {
@@ -31,6 +33,6 @@ export const useThreads = defineStore('threads', () => {
     load,
     setPermission,
     addPost: (post: Post) => upsert(posts.value, post),
-    addStep: (step: Step) => upsert(steps.value, step),
+    addStep: (step: Step) => void upsert(steps.value, step),
   };
 });

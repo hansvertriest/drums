@@ -5,7 +5,11 @@ import type { z } from 'zod';
 export type AgentEvent =
   /** The backend's id for this session, stored so the agent can resume. */
   | { type: 'session'; sessionId: string }
-  | { type: 'step'; tool: string; summary: string }
+  /**
+   * A tool call. `writes` holds the files it is known to write: relative to the session's
+   * working directory when inside it, absolute when not. Best effort for a shell command.
+   */
+  | { type: 'step'; tool: string; summary: string; writes?: string[] }
   | { type: 'text'; text: string }
   /** A call only the user can decide. The turn waits for `respondPermission`. */
   | { type: 'permission.requested'; id: string; tool: string; title: string; detail: string }

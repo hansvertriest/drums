@@ -41,6 +41,9 @@ const pendingCount = computed(() => answers.pendingCount + map.pendingComments);
     <span class="logo-cell">
       <span class="logo" role="img" aria-label="drums">d</span>
     </span>
+    <button class="menu" type="button" aria-label="Workspaces" :aria-expanded="ui.drawerOpen" @click="ui.drawerOpen = !ui.drawerOpen">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" /></svg>
+    </button>
     <div class="title">
       <h1>{{ workspaces.current?.goal ?? 'drums' }}</h1>
       <p>{{ subline }}</p>
@@ -100,9 +103,45 @@ const pendingCount = computed(() => answers.pendingCount + map.pendingComments);
   justify-content: center;
   font: 600 16px var(--mono);
 }
+.menu {
+  display: none;
+}
 .title {
   flex: 1;
   min-width: 0;
+}
+@media (max-width: 900px) {
+  .header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    gap: 10px;
+    padding: 8px 16px 8px 0;
+  }
+  .logo-cell {
+    width: 56px;
+    border-right: 0;
+  }
+  .menu {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-left: -6px;
+    border: 1px solid var(--stroke);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  /* The first line is who and what, the second status and actions. */
+  .title {
+    flex: 1 1 calc(100% - 120px);
+  }
+  .pill {
+    margin-right: auto;
+    padding-left: 16px;
+  }
 }
 .title h1 {
   margin: 0;

@@ -161,9 +161,9 @@ describe('adding an agent', () => {
     picker.answer = async () => [{ role: 'reviewer', instruction: 'Review the scope' }];
     const added = await services.agents.add(ws, 'Review the scope');
     expect(added).toMatchObject({ role: 'reviewer', name: 'Reviewer' });
-    expect(picker.asked[0]).toMatchObject({ goal: 'Review the scope', exactlyOne: true, hasRepos: false });
-    expect(picker.asked[0]?.candidates.map((c) => c.id)).toEqual(['scoper', 'researcher', 'designer', 'reviewer']);
-    expect(picker.asked[0]?.overview).toContain('a1 "Scope: Checkout"');
+    expect(picker.asked.at(-1)).toMatchObject({ goal: 'Review the scope', exactlyOne: true, hasRepos: false });
+    expect(picker.asked.at(-1)?.candidates.map((c) => c.id)).toEqual(['scoper', 'researcher', 'designer', 'reviewer']);
+    expect(picker.asked.at(-1)?.overview).toContain('a1 "Scope: Checkout"');
     expect(backend.last().options.prompt).toContain('You are the Reviewer');
     expect(seen).toContainEqual({ type: 'agent.added', workspace: ws, agent: expect.objectContaining({ id: added.id }) });
   });

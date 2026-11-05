@@ -22,6 +22,8 @@ State lives in files, per spec §8. These environment variables move it; use the
 | `DRUMS_HOME` | `~/.drums` | where `config.json` lives |
 | `DRUMS_WORKSPACES_ROOT` | `workspacesRoot` in `config.json`, else `<home>/workspaces` | where workspaces live |
 | `DRUMS_AGENT_MODEL` | `models.agent` in `config.json`, else the default in `packages/server/src/config.ts` | the agents' model |
+| `DRUMS_ROLE_PICKER_MODEL` | `models.rolePicker` in `config.json`, else the same default | the model that picks roles |
+| `ANTHROPIC_API_KEY` | none | with a key, roles are picked over the Anthropic API; without one, on the machine's Claude Code login |
 
 To attach repos to workspaces, list them in `config.json`: `{ "projects": ["/path/to/repo"] }`. A repo's folder name is what you see. Workspaces get a worktree of each repo, and base indexes are shared in `<home>/dyffle-base`. `gh` on `PATH` opens the PRs, with its own login.
 

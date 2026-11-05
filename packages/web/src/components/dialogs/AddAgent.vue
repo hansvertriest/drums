@@ -33,7 +33,7 @@ const add = async () => {
       <textarea id="instruction" ref="input" v-model="instruction" rows="3" placeholder="e.g. Review the scope against the goal" required />
       <div class="acts">
         <button type="button" @click="ui.addAgentOpen = false">Cancel</button>
-        <button class="primary" type="submit" :disabled="!instruction.trim() || adding">Add</button>
+        <button class="primary" type="submit" :disabled="!instruction.trim() || adding">{{ adding ? 'Adding…' : 'Add' }}</button>
       </div>
     </form>
   </div>

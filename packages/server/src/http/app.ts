@@ -11,6 +11,7 @@ import { healthRoutes } from './routes/health.js';
 import { mapRoutes } from './routes/map.js';
 import { mapViewerRoutes } from './routes/map-viewer.js';
 import { messageRoutes } from './routes/messages.js';
+import { nudgeRoutes } from './routes/nudges.js';
 import { permissionRoutes } from './routes/permissions.js';
 import { projectRoutes } from './routes/projects.js';
 import { prRoutes } from './routes/prs.js';
@@ -32,6 +33,7 @@ const routeGroups: readonly RouteGroup[] = [
   mapRoutes,
   mapViewerRoutes,
   prRoutes,
+  nudgeRoutes,
 ];
 
 export interface AppOptions {

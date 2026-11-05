@@ -3,18 +3,26 @@ import type { Post } from '@drums/protocol';
 import { renderMarkdown } from '../../markdown';
 import { useAgents } from '../../stores/agents';
 import { useArtifacts } from '../../stores/artifacts';
+import { useUi } from '../../stores/ui';
 import { shortTime } from '../../time';
 
 defineProps<{ post: Post }>();
 
 const agents = useAgents();
 const artifacts = useArtifacts();
+const ui = useUi();
+
+/** On phones the stage is another tab, so go there. */
+const show = (artifact: string, version?: number) => {
+  artifacts.open(artifact, version);
+  ui.phoneTab = 'stage';
+};
 </script>
 
 <template>
   <div v-if="post.kind === 'message'" class="user">
     <span class="who">You · {{ shortTime(post.at) }}</span>
-    <button v-if="post.focus" type="button" class="about" @click="artifacts.open(post.focus.artifact, post.focus.version)">
+    <button v-if="post.focus" type="button" class="about" @click="show(post.focus.artifact, post.focus.version)">
       About: {{ artifacts.titleOf(post.focus.artifact) }} · v{{ post.focus.version }}
     </button>
     <div class="md" v-html="renderMarkdown(post.text)" />
@@ -47,7 +55,7 @@ const artifacts = useArtifacts();
       type="button"
       class="open"
       :aria-label="`Open the branch map at ${post.title}`"
-      @click="artifacts.open(post.artifact)"
+      @click="show(post.artifact)"
     >
       <span v-for="repo in post.repos" :key="repo.name">
         {{ repo.name }} · {{ repo.files }} file{{ repo.files === 1 ? '' : 's' }}
@@ -60,7 +68,7 @@ const artifacts = useArtifacts();
       type="button"
       class="open"
       :aria-label="`Open ${post.title} v${post.version}`"
-      @click="artifacts.open(post.artifact, post.version)"
+      @click="show(post.artifact, post.version)"
     >
       <span>{{ post.title }}</span>
       <code>v{{ post.version }}</code>

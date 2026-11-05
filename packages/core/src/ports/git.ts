@@ -22,6 +22,11 @@ export interface Git {
   branches(repo: string): Promise<{ names: string[]; current: string | undefined }>;
   /** The branch against its merge base with `base`, uncommitted and untracked files included. */
   changes(worktree: string, base: string): Promise<BranchChanges>;
+  /**
+   * Identifies what is in the worktree, uncommitted and untracked files included. The same
+   * content gives the same id, committed or not. Changes nothing the user can see.
+   */
+  contentId(worktree: string): Promise<string>;
   /** Commits whatever is uncommitted. False if there was nothing. */
   commitAll(worktree: string, message: string): Promise<boolean>;
   /** To `origin`, never forced. */

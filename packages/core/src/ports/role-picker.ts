@@ -22,5 +22,9 @@ export interface RolePickRequest {
 }
 
 export interface RolePicker {
+  /**
+   * Chooses from `candidates`. May return nothing, and rejects if it can't answer in reasonable
+   * time: a hung call must end here, because creating a workspace waits for it.
+   */
   pick(request: RolePickRequest): Promise<RolePick[]>;
 }

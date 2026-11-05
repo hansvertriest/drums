@@ -7,6 +7,7 @@ import { useAgents } from './agents';
 import { useAnswers } from './answers';
 import { useArtifacts } from './artifacts';
 import { useMap } from './map';
+import { useNews } from './news';
 import { useThreads } from './threads';
 import { useUi } from './ui';
 
@@ -25,6 +26,7 @@ export const useWorkspaces = defineStore('workspaces', () => {
   const answers = useAnswers();
   const map = useMap();
   const ui = useUi();
+  const news = useNews();
 
   const loadState = (state: WorkspaceState) => {
     agents.load(state.workspace.agents);
@@ -46,6 +48,7 @@ export const useWorkspaces = defineStore('workspaces', () => {
 
   const refreshList = async () => {
     workspaces.value = await api.listWorkspaces();
+    news.update(workspaces.value, currentId.value);
   };
 
   let listTimer: ReturnType<typeof setTimeout> | undefined;
@@ -78,7 +81,9 @@ export const useWorkspaces = defineStore('workspaces', () => {
     'agent.added': (event) => agents.add(event.agent),
     'agent.status': (event) => agents.setStatus(event.agent, event.status),
     'agent.step': (event) => threads.addStep(event.step),
-    'post.created': (event) => threads.addPost(event.post),
+    'post.created': (event) => {
+      if (threads.addPost(event.post) && event.post.kind !== 'message' && event.post.kind !== 'feedback') ui.noteAgentPost();
+    },
     'artifact.version': (event) => artifacts.addVersion(event.artifact, event.artifact.versions.at(-1)?.by === agents.current?.id),
     'answers.changed': (event) => answers.set(event.set),
     'permission.changed': (event) => threads.setPermission(event.request),
@@ -95,6 +100,8 @@ export const useWorkspaces = defineStore('workspaces', () => {
   const open = async (id: WorkspaceId) => {
     unsubscribe?.();
     currentId.value = id;
+    news.update(workspaces.value, id);
+    ui.railNews = false;
     artifacts.reset();
     window.location.hash = `#/w/${id}`;
     unsubscribe = subscribe(id, {

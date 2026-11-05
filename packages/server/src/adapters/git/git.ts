@@ -1,5 +1,6 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { ConflictError, type BranchChanges, type Git } from '@drums/core';
 import { execa } from 'execa';
 
@@ -43,6 +44,26 @@ async function changes(worktree: string, base: string): Promise<BranchChanges> {
   return { files: numstat.length + untracked.length, additions: additions + added.reduce((a, b) => a + b, 0), deletions };
 }
 
+/**
+ * The tree the worktree would commit, written through a copy of its index so nothing the user can
+ * see moves. A tree says nothing about commits, so committing doesn't look like a change. The copy
+ * keeps git from having to hash every file again.
+ */
+async function contentId(worktree: string): Promise<string> {
+  const folder = await mkdtemp(join(tmpdir(), 'drums-index-'));
+  try {
+    const index = join(folder, 'index');
+    const own = resolve(worktree, (await run(worktree, 'rev-parse', '--git-path', 'index')).trim());
+    await copyFile(own, index);
+    const env = { GIT_INDEX_FILE: index };
+    await execa('git', ['add', '-A'], { cwd: worktree, env });
+    const { stdout } = await execa('git', ['write-tree'], { cwd: worktree, env });
+    return stdout.trim();
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}
+
 /** `Git` via execa. Branch names are checked at the HTTP edge; they still go after `--` where git allows it. */
 export function createExecaGit(): Git {
   return {
@@ -64,6 +85,7 @@ export function createExecaGit(): Git {
       return { names, current };
     },
     changes,
+    contentId,
     async commitAll(worktree, message) {
       await run(worktree, 'add', '-A');
       if (lines(await run(worktree, 'diff', '--cached', '--name-only')).length === 0) return false;

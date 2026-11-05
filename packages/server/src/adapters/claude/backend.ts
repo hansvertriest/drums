@@ -20,7 +20,7 @@ export function createClaudeBackend({ model, runQuery = query, classifier = true
       const gate = session.access === 'shell-and-files' ? createPermissionGate(session.cwd, emit) : undefined;
       const options = { ...sessionOptions(session, model, { canUseTool: gate?.canUseTool, classifier }), ...extra };
       return { query: runQuery({ prompt, options }), gate };
-    });
+    }, session.cwd);
   return {
     start: async (session) => open(session),
     resume: async (sessionId, session) => open(session, { resume: sessionId }),

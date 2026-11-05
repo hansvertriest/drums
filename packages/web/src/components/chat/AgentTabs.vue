@@ -1,13 +1,25 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue';
 import { useAgents } from '../../stores/agents';
 import { useUi } from '../../stores/ui';
 
 const agents = useAgents();
 const ui = useUi();
+const collapse = ref<HTMLButtonElement>();
+
+/** Back from the floating button: the keyboard stays where it was. */
+watch(
+  () => ui.railCollapsed,
+  (collapsed) => {
+    if (!collapsed) collapse.value?.focus({ preventScroll: true });
+  },
+  { flush: 'post' },
+);
 </script>
 
 <template>
   <div class="head">
+    <button ref="collapse" type="button" class="collapse" aria-label="Collapse chat" title="Collapse chat (\)" @click="ui.toggleRail()">«</button>
     <div class="tabs" role="tablist">
       <button
         v-for="agent in agents.agents"
@@ -34,6 +46,24 @@ const ui = useUi();
   gap: 2px;
   padding: 8px 8px 6px;
   border-bottom: 1px solid var(--line);
+}
+.collapse {
+  flex: none;
+  width: 28px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 15px;
+  color: var(--muted);
+}
+.collapse:hover {
+  background: var(--surface-2);
+}
+@media (max-width: 900px) {
+  .collapse {
+    display: none;
+  }
 }
 .tabs {
   flex: 1;

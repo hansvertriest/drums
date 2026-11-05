@@ -1,39 +1,32 @@
-import type { AgentId, CheckpointRepo, MapState, ProjectList, Workspace, WorkspaceId, WorkspaceRepo } from '@drums/protocol';
-import type { ArtifactService } from '../artifacts/artifact-service.js';
-import { branchMapArtifactKind } from '../artifacts/branch-map.js';
-import { createTurns } from '../concurrency/turns.js';
+import type { MapState, ProjectList, Workspace, WorkspaceId, WorkspaceRepo } from '@drums/protocol';
 import { ConflictError, InvalidError, NotFoundError } from '../errors.js';
 import type { BranchChanges, Git } from '../ports/git.js';
 import type { CodeReview, ImpactResult, MapSource, PendingReview } from '../ports/code-review.js';
 import type { Projects } from '../ports/projects.js';
 import type { Store } from '../ports/store.js';
-import { findRepo, type CodeSessions } from './code-sessions.js';
+import type { Checkpoints } from './checkpoints.js';
+import { findRepo } from './code-sessions.js';
+import type { KeptSessions } from './session-keeper.js';
 
-export interface CheckpointResult {
-  /** The branch map's new version. Absent when nothing changed, and then there is no version. */
-  version?: number;
-  repos: Array<Pick<CheckpointRepo, 'name' | 'files' | 'additions' | 'deletions'>>;
-  note?: string;
-  /** Repos that couldn't take part; the rest did. */
-  failed?: Array<{ repo: string; error: string }>;
-}
+export type { CheckpointResult } from './checkpoints.js';
 
 export interface PendingCode extends PendingReview {
   repo: string;
 }
 
-export interface CodeService {
+export interface CodeService extends Checkpoints {
   projects(): Promise<ProjectList>;
   /** Worktrees for a new workspace: all or none. Sessions start with `openAll`, once the workspace exists. */
   attach(workspace: WorkspaceId, requested: ReadonlyArray<{ name: string; base: string }>, branch: string): Promise<WorkspaceRepo[]>;
   /** Starts the sessions now, so the first checkpoint measures from here. Those that can't run try again on demand. */
   openAll(workspace: WorkspaceId): Promise<void>;
-  checkpoint(workspace: WorkspaceId, agent: AgentId, input: { title: string; message: string }): Promise<CheckpointResult>;
   impact(workspace: WorkspaceId, target?: string): Promise<{ found: boolean; text: string }>;
   mapState(workspace: WorkspaceId): Promise<MapState>;
   /** What the frame of one repo reads and writes. */
   mapSource(workspace: WorkspaceId, repo: string): Promise<MapSource>;
   viewerHtml(): string;
+  /** Someone has this workspace open, so its sessions stay. Call what it returns when they leave. */
+  view(workspace: WorkspaceId): () => void;
   changes(workspace: Workspace): Promise<BranchChanges>;
   /** Comments Send hasn't delivered, per repo that has any. */
   pendingReviews(workspace: WorkspaceId): Promise<PendingCode[]>;
@@ -45,19 +38,15 @@ export interface CodeServiceDeps {
   git: Git;
   projects: Projects;
   codeReview: CodeReview;
-  sessions: CodeSessions;
-  artifacts: ArtifactService;
-  /** How a checkpoint names its author. */
-  namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
+  sessions: KeptSessions;
+  checkpoints: Checkpoints;
 }
 
 const NONE: BranchChanges = { files: 0, additions: 0, deletions: 0 };
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createCodeService(deps: CodeServiceDeps): CodeService {
-  const { store, git, projects, codeReview, sessions, artifacts, namer } = deps;
-  /** One checkpoint at a time per workspace, so versions and each repo's posts stay in the same order. */
-  const inTurn = createTurns();
+  const { store, git, projects, codeReview, sessions, checkpoints } = deps;
 
   const load = async (id: WorkspaceId) => {
     const workspace = await store.getWorkspace(id);
@@ -79,12 +68,6 @@ export function createCodeService(deps: CodeServiceDeps): CodeService {
     for (const { source, name, branch } of added) {
       await git.removeWorktree({ repo: source, path: sessions.worktree(id, name), branch }).catch(() => undefined);
     }
-  };
-
-  const mapId = async (workspace: WorkspaceId) => {
-    const metas = await store.listArtifacts(workspace);
-    const found = metas.find((meta) => meta.kind === branchMapArtifactKind.id);
-    return found?.id ?? (await artifacts.createEmpty(workspace, { title: branchMapArtifactKind.name, kind: branchMapArtifactKind.id })).id;
   };
 
   const nothingFound = (results: ReadonlyArray<{ repo: string; result: ImpactResult }>, target: string) => {
@@ -113,52 +96,27 @@ export function createCodeService(deps: CodeServiceDeps): CodeService {
         return { name, base, source: project.path };
       });
       const added: Array<{ source: string; name: string; branch?: string | undefined }> = [];
+      /** What "changed since" is measured from, until the first checkpoint. */
+      const contents = new Map<string, string>();
       try {
         for (const { name, base, source } of wanted) {
-          const { createdBranch } = await git.addWorktree({ repo: source, path: sessions.worktree(id, name), branch, base });
+          const path = sessions.worktree(id, name);
+          const { createdBranch } = await git.addWorktree({ repo: source, path, branch, base });
           added.push({ source, name, branch: createdBranch ? branch : undefined });
+          contents.set(name, await git.contentId(path));
         }
       } catch (error) {
         // Dyffle has made nothing to clean up yet: sessions only start once every worktree exists.
         await undo(id, added);
         throw error instanceof ConflictError ? error : new ConflictError(message(error));
       }
-      return wanted.map(({ name, base, source }) => ({ name, base, source, delivered: [] }));
+      return wanted.map(({ name, base, source }) => ({ name, base, source, delivered: [], checkpointed: contents.get(name) as string }));
     },
     async openAll(id) {
       const { repos } = await load(id);
       await Promise.all(repos.map((repo) => sessions.session(id, repo).catch(() => undefined)));
     },
-    checkpoint: (id, agent, { title, message: text }) =>
-      inTurn(id, async () => {
-        const { repos } = await withRepos(id);
-        const author = (await namer(id))(agent);
-        const failed: NonNullable<CheckpointResult['failed']> = [];
-        const changed: CheckpointRepo[] = [];
-        for (const repo of repos) {
-          try {
-            const session = await sessions.session(id, repo);
-            const { post, stats } = await session.checkpoint({ title, message: text, author });
-            if (stats) changed.push({ name: repo.name, post, ...stats });
-          } catch (error) {
-            failed.push({ repo: repo.name, error: message(error) });
-          }
-        }
-        const summary = changed.map(({ name, files, additions, deletions }) => ({ name, files, additions, deletions }));
-        const partial = failed.length > 0 ? { failed } : {};
-        if (changed.length === 0) {
-          if (failed.length === repos.length) throw new ConflictError(`The checkpoint failed. ${failed.map((f) => `${f.repo}: ${f.error}`).join(' ')}`);
-          return { repos: [], note: 'Nothing changed since your last checkpoint, so there is no new version.', ...partial };
-        }
-        const map = await mapId(id);
-        const { version } = await artifacts.record(id, agent, {
-          id: map,
-          content: JSON.stringify({ repos: changed }),
-          note: title,
-          post: (number) => ({ kind: 'checkpoint', title, message: text, artifact: map, version: number, repos: changed }),
-        });
-        return { version, repos: summary, ...partial };
-      }),
+    ...checkpoints,
     async impact(id, target) {
       const { repos } = await withRepos(id);
       const results = await Promise.all(
@@ -204,6 +162,7 @@ export function createCodeService(deps: CodeServiceDeps): CodeService {
       return (await sessions.session(id, findRepo(repos, name))).map;
     },
     viewerHtml: () => codeReview.viewerHtml(),
+    view: sessions.view,
     async changes(workspace) {
       const counts = await Promise.all(workspace.repos.map((repo) => repoChanges(workspace.id, repo)));
       return counts.reduce(

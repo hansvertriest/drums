@@ -5,6 +5,7 @@ import { HealthResponse, VersionResponse, WorkspaceList, WorkspaceState } from '
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { main, type RunningDrums } from './main.js';
 import { fakeBackend } from './testing/fake-backend.js';
+import { createKeywordRolePicker } from './testing/keyword-role-picker.js';
 
 let dir: string;
 let webRoot: string;
@@ -17,7 +18,7 @@ beforeAll(async () => {
   mkdirSync(join(webRoot, 'assets'), { recursive: true });
   writeFileSync(join(webRoot, 'index.html'), '<title>drums</title>');
   writeFileSync(join(webRoot, 'assets', 'a.js'), 'export {};');
-  drums = await main({ port: 0, webRoot, home: join(dir, 'home'), workspacesRoot: join(dir, 'ws'), agentBackend: fake.backend });
+  drums = await main({ port: 0, webRoot, home: join(dir, 'home'), workspacesRoot: join(dir, 'ws'), agentBackend: fake.backend, rolePicker: createKeywordRolePicker() });
 });
 
 afterAll(async () => {

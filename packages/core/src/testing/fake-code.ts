@@ -23,6 +23,8 @@ export function createFakeCode() {
     sessions: [] as FakeReviewSession[],
     /** Per worktree. */
     changes: new Map<string, BranchChanges>(),
+    /** What a worktree holds, per worktree: change it to act as an edit. */
+    contents: new Map<string, string>(),
     change: { post: 1, stats: { files: 1, additions: 2, deletions: 1, symbols: 1 } } as CodeChange,
     impact: { status: 'found', markdown: '## impact' } as ImpactResult,
     pending: new Map<string, PendingReview>(),
@@ -40,6 +42,7 @@ export function createFakeCode() {
     removeWorktree: async ({ path }) => void state.removed.push(path),
     branches: async (repo) => ({ names: ['dev', 'main'], current: repo.endsWith('web') ? 'dev' : 'main' }),
     changes: async (worktree) => state.changes.get(worktree) ?? { files: 1, additions: 2, deletions: 1 },
+    contentId: async (worktree) => state.contents.get(worktree) ?? 'initial',
     commitAll: async (worktree, message) => {
       state.commits.push({ worktree, message });
       return true;

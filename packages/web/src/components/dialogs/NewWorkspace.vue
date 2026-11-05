@@ -65,7 +65,7 @@ const start = async () => {
       </template>
       <div class="acts">
         <button type="button" @click="ui.newWorkspaceOpen = false">Cancel</button>
-        <button class="primary" type="submit" :disabled="!goal.trim() || starting">Start</button>
+        <button class="primary" type="submit" :disabled="!goal.trim() || starting">{{ starting ? 'Starting…' : 'Start' }}</button>
       </div>
     </form>
   </div>

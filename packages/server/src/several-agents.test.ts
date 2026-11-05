@@ -5,6 +5,7 @@ import { Agent, WorkspaceList, WorkspaceState } from '@drums/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { main, type RunningDrums } from './main.js';
 import { fakeBackend } from './testing/fake-backend.js';
+import { createKeywordRolePicker } from './testing/keyword-role-picker.js';
 
 /** Several agents through the real HTTP layer and the real file store; only the model is fake. */
 let dir: string;
@@ -15,7 +16,7 @@ beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'drums-several-'));
   mkdirSync(join(dir, 'web'));
   writeFileSync(join(dir, 'web', 'index.html'), '<title>drums</title>');
-  drums = await main({ port: 0, webRoot: join(dir, 'web'), home: join(dir, 'home'), workspacesRoot: join(dir, 'ws'), agentBackend: fake.backend });
+  drums = await main({ port: 0, webRoot: join(dir, 'web'), home: join(dir, 'home'), workspacesRoot: join(dir, 'ws'), agentBackend: fake.backend, rolePicker: createKeywordRolePicker() });
 });
 
 afterAll(async () => {
@@ -168,7 +169,7 @@ describe('simultaneous tool calls on the real file store', () => {
 describe('the strip', () => {
   it('hears over one workspace stream that another changed, with none of its content', async () => {
     const open = await workspaceWithTeam('Open', []);
-    const other = await workspaceWithTeam('Other', []);
+    const other = await workspaceWithTeam('Quux', []);
     const abort = new AbortController();
     const response = await get(`/api/workspaces/${open.ws}/stream`, { signal: abort.signal });
     const reader = response.body!.getReader();

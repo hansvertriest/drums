@@ -20,6 +20,8 @@ export type { PostService } from './posts/post-service.js';
 export type { Feed, FeedEntry } from './posts/feed.js';
 export type { ArtifactService, UpdateResult, VersionContent } from './artifacts/artifact-service.js';
 export type { AgentService } from './agents/agent-service.js';
+export type { EndedTurn, TurnCheck, TurnCheckServices } from './agents/turn-checks/turn-check.js';
+export { createTurnCheckRegistry, turnChecks, type TurnCheckRegistry } from './agents/turn-checks/registry.js';
 export type { CheckpointResult, CodeService } from './code/code-service.js';
 export type { PrService } from './code/pr-service.js';
 export type { FeedbackService } from './feedback/feedback-service.js';

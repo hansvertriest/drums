@@ -63,3 +63,80 @@ describe('WorkspaceService', () => {
     await expect(services.workspaces.state('nope')).rejects.toThrow('No workspace nope');
   });
 });
+
+describe('picking roles for a new workspace', () => {
+  const coderIn = (names: string[]) => names.includes('coder');
+
+  it('starts what the picker chooses, each with its own instruction', async () => {
+    const { services, picker, backend } = createHarness();
+    picker.answer = async () => [
+      { role: 'researcher', instruction: 'Compare the loyalty programmes' },
+      { role: 'designer', instruction: 'Sketch the points page' },
+    ];
+    const { workspace, posts } = await services.workspaces.create({ goal: 'Loyalty' });
+    expect(workspace.agents.map((a) => [a.role, a.name, a.status])).toEqual([
+      ['researcher', 'Researcher', 'running'],
+      ['designer', 'Designer', 'running'],
+    ]);
+    expect(posts.map((p) => (p.kind === 'message' ? p.text : ''))).toEqual(['Compare the loyalty programmes', 'Sketch the points page']);
+    expect(backend.sessions.map((s) => s.received[0])).toEqual([expect.stringContaining('goal: Loyalty'), expect.stringContaining('goal: Loyalty')]);
+  });
+
+  it('offers the registry\'s summaries, and a role needing a repo only with repos', async () => {
+    const { services, picker } = createHarness();
+    await services.workspaces.create({ goal: 'No repos' });
+    expect(coderIn(picker.asked[0]!.candidates.map((c) => c.id))).toBe(false);
+    expect(picker.asked[0]).toMatchObject({ goal: 'No repos', hasRepos: false });
+    expect(picker.asked[0]!.candidates[0]!.summary).toBeTruthy();
+    await services.workspaces.create({ goal: 'Repos', repos: [{ name: 'api', base: 'main' }] });
+    expect(coderIn(picker.asked[1]!.candidates.map((c) => c.id))).toBe(true);
+    expect(picker.asked[1]).toMatchObject({ goal: 'Repos', hasRepos: true });
+  });
+
+  it('never starts a role that needs a repo in a workspace without, whatever comes back', async () => {
+    const { services, picker } = createHarness();
+    picker.answer = async () => [{ role: 'coder', instruction: 'Hack' }];
+    const { workspace } = await services.workspaces.create({ goal: 'x' });
+    expect(workspace.agents.map((a) => a.role)).toEqual(['scoper']);
+  });
+
+  it.each([
+    ['nothing', async () => []],
+    ['an unknown role', async () => [{ role: 'wizard', instruction: 'x' }]],
+    ['a failure', async () => Promise.reject(new Error('down'))],
+  ])('starts a Scoper on the goal when the picker gives %s, with repos or without', async (_name, answer) => {
+    const { services, picker } = createHarness();
+    picker.answer = answer;
+    const plain = await services.workspaces.create({ goal: 'Plain' });
+    expect(plain.workspace.agents.map((a) => a.role)).toEqual(['scoper']);
+    expect(plain.posts).toMatchObject([{ kind: 'message', text: 'Plain' }]);
+    const code = await services.workspaces.create({ goal: 'Code', repos: [{ name: 'api', base: 'main' }] });
+    expect(code.workspace.agents.map((a) => a.role)).toEqual(['scoper']);
+  });
+
+  it('starts each role once, and works from the goal when the instruction is empty', async () => {
+    const { services, picker } = createHarness();
+    picker.answer = async () => [
+      { role: 'designer', instruction: '   ' },
+      { role: 'designer', instruction: 'Again' },
+    ];
+    const { workspace, posts } = await services.workspaces.create({ goal: 'Goal' });
+    expect(workspace.agents.map((a) => a.role)).toEqual(['designer']);
+    expect(posts).toMatchObject([{ kind: 'message', text: 'Goal' }]);
+  });
+
+  it('asks the model before anything starts, and not at all when the worktrees fail', async () => {
+    const { services, picker, code } = createHarness();
+    code.state.failAdd = 'api';
+    await expect(services.workspaces.create({ goal: 'x', repos: [{ name: 'api', base: 'main' }] })).rejects.toThrow(/cannot add/);
+    expect(picker.asked).toEqual([]);
+  });
+
+  it('gives the strip where the last post is', async () => {
+    const { services, backend } = createHarness();
+    await services.workspaces.create({ goal: 'x' });
+    expect((await services.workspaces.list())[0]?.lastPost).toBeUndefined();
+    await backend.last().tool('post', { title: 't', message: 'm' });
+    expect((await services.workspaces.list())[0]?.lastPost).toBe(2);
+  });
+});

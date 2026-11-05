@@ -49,8 +49,8 @@ describe('App without a workspace', () => {
   it('shows the header with the logo and a disabled Send', () => {
     const header = shell().get('header');
     expect(header.get('[aria-label="drums"]').text()).toBe('d');
-    expect(header.get('button').text()).toContain('Send');
-    expect(header.get('button').attributes('disabled')).toBeDefined();
+    expect(header.get('button.send').text()).toContain('Send');
+    expect(header.get('button.send').attributes('disabled')).toBeDefined();
   });
 
   it('shows the strip with New workspace, and no role picker in its dialog', async () => {
@@ -236,7 +236,7 @@ describe('agent tabs', () => {
     const store = two();
     const app = shell(store);
     expect(app.find('.working').exists()).toBe(false);
-    await app.findAll('[role="tab"]')[1]?.trigger('click');
+    await app.findAll('section[aria-label="Chat"] [role="tab"]')[1]?.trigger('click');
     expect(app.find('.working').exists()).toBe(true);
   });
 });

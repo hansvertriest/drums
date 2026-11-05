@@ -10,7 +10,7 @@ import { useWorkspaces } from './workspaces';
 const at = '2026-01-01T10:00:00.000Z';
 const scoper = { id: 'ag', role: 'scoper', name: 'Scoper', status: 'running' as const };
 const state = (posts: Post[] = []): WorkspaceState => ({
-  workspace: { id: 'w1', goal: 'Goal', createdAt: at, agents: [scoper], repos: [], permissions: [] },
+  workspace: { id: 'w1', goal: 'Goal', createdAt: at, agents: [scoper], repos: [], permissions: [], nudges: {} },
   posts,
   steps: [],
   artifacts: [],

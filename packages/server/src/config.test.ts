@@ -22,6 +22,13 @@ describe('loadConfig', () => {
     expect(loadConfig({ home }, {})).toMatchObject({ workspacesRoot: '/w', models: { agent: 'm' } });
   });
 
+  it('keeps the role picker\'s model and the grace period in config, with defaults', () => {
+    expect(loadConfig({ home }, {})).toMatchObject({ models: { rolePicker: 'claude-opus-5-5' }, sessionGraceMs: 60_000 });
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ models: { rolePicker: 'file-model' }, sessionGraceMs: 5 }));
+    expect(loadConfig({ home }, {})).toMatchObject({ models: { rolePicker: 'file-model' }, sessionGraceMs: 5 });
+    expect(loadConfig({ home }, { DRUMS_ROLE_PICKER_MODEL: 'env-model' }).models.rolePicker).toBe('env-model');
+  });
+
   it('lets the environment and then options win', () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ workspacesRoot: '/file' }));
     const env = { DRUMS_HOME: home, DRUMS_WORKSPACES_ROOT: '/env', DRUMS_AGENT_MODEL: 'env-model' };
