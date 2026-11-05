@@ -1,5 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { createTurns, type Store } from '@drums/core';
 import { AnswerSet, Post, Step, Workspace, WorkspaceId } from '@drums/protocol';
 import { createArtifactStore } from './artifacts.js';
@@ -54,8 +53,7 @@ export function createFsStore(workspacesRoot: string): Store {
 
     async saveImage(workspace, name, bytes) {
       const path = paths.image(workspace, name);
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, bytes, { flag: 'wx' });
+      if (!(await writeNew(path, bytes))) throw new Error(`Image ${name} already exists.`);
       return path;
     },
     readImage: (workspace, name) =>

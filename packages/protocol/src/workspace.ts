@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Agent } from './agent.js';
-import { ArtifactId, BranchName, RepoName, RoleId, WorkspaceId } from './ids.js';
+import { BranchName, RepoName, RoleId, WorkspaceId } from './ids.js';
 import { PermissionRequest } from './permission.js';
 
 export const PullRequest = z.object({
@@ -45,7 +45,6 @@ export const Workspace = z.object({
   nudges: NudgeCounts.default({}),
   /** Archived by the user: out of the strip, its sessions stopped, until it is restored. */
   archivedAt: z.iso.datetime().optional(),
-  archivedArtifacts: z.array(ArtifactId).optional(),
 });
 export type Workspace = z.infer<typeof Workspace>;
 

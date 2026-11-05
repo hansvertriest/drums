@@ -1,9 +1,9 @@
-import type { Agent, AgentId, Focus, ImageType, NudgeCounts, PermissionDecision, RoleId, WorkspaceId } from '@drums/protocol';
+import type { Agent, AgentId, Focus, NudgeCounts, PermissionDecision, RoleId, WorkspaceId } from '@drums/protocol';
 import type { ArtifactService } from '../artifacts/artifact-service.js';
 import type { CodeService } from '../code/code-service.js';
-import { ConflictError } from '../errors.js';
 import type { EventBus } from '../events/event-bus.js';
 import { focusBlock } from '../focus/focus-block.js';
+import { imagesBlock, savePastedImages, type PastedImage } from '../images/pasted-images.js';
 import { workspaceOverview } from '../overview/overview.js';
 import type { AgentBackend } from '../ports/agent-backend.js';
 import type { Clock } from '../ports/clock.js';
@@ -19,7 +19,7 @@ import type { ToolServices } from '../tools/tool-definition.js';
 import { createAgentClaims } from './agent-claims.js';
 import { uniqueAgentName } from './agent-name.js';
 import { createAgentPermissions } from './agent-permissions.js';
-import { createAgentRecords } from './agent-records.js';
+import { createAgentRecords, refuseIfArchived } from './agent-records.js';
 import { createAgentSessions } from './agent-sessions.js';
 import { createEndOfTurn } from './turn-checks/end-of-turn.js';
 import type { TurnCheckRegistry } from './turn-checks/registry.js';
@@ -62,13 +62,6 @@ export interface AgentService {
   recover(): Promise<void>;
   closeAll(): void;
 }
-
-export interface PastedImage {
-  type: ImageType;
-  bytes: Uint8Array;
-}
-
-const IMAGE_EXTENSIONS: Record<ImageType, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 
 export interface AgentServiceDeps {
   store: Store;
@@ -146,30 +139,24 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     reportError: (workspace, agent, text) => records.addError(workspace, agent, text),
     async add(workspace, instruction) {
       const [view, found] = await Promise.all([overview(workspace), store.getWorkspace(workspace)]);
-      if (found?.archivedAt) throw new ConflictError('This workspace is archived. Restore it to carry on.');
+      refuseIfArchived(found);
       const hasRepos = (found?.repos.length ?? 0) > 0;
       const pick = await pickOneRole({ picker: rolePicker, roles, fallback: firstRole }, { instruction, overview: view, hasRepos });
       return service.start(workspace, pick.role, pick.instruction);
     },
     async send(workspace, id, text, focus, images = []) {
-      const agent = await records.find(workspace, id);
+      const agent = await records.findOpen(workspace, id);
       claims.claim(agent);
       const message = await claims.whilePreparing(id, async () => {
         const block = focus && focusBlock(focus, await artifacts.get(workspace, focus.artifact), await service.namer(workspace));
-        const saved = await Promise.all(
-          images.map(async ({ type, bytes }) => {
-            const name = `${ids.next()}.${IMAGE_EXTENSIONS[type]}`;
-            return { name, path: await store.saveImage(workspace, name, bytes) };
-          }),
-        );
+        const saved = await savePastedImages(store, ids, workspace, images);
         await posts.add(workspace, id, { kind: 'message', text, ...(focus ? { focus } : {}), ...(saved.length > 0 ? { images: saved.map(({ name }) => name) } : {}) });
-        const attached = saved.length > 0 ? `\n\n<drums-images>\nThe user pasted ${saved.length === 1 ? 'an image' : `${saved.length} images`} with this message. Look at ${saved.length === 1 ? 'it' : 'them'} with Read:\n${saved.map(({ path }) => `- ${path}`).join('\n')}\n</drums-images>` : '';
-        return `${block ? `${block}\n` : ''}${text}${attached}`;
+        return `${block ? `${block}\n` : ''}${text}${imagesBlock(saved)}`;
       });
       await sessions.deliver(workspace, id, message);
     },
     async reserve(workspace, wanted) {
-      claims.claimAll(await Promise.all(wanted.map((id) => records.find(workspace, id))));
+      claims.claimAll(await Promise.all(wanted.map((id) => records.findOpen(workspace, id))));
     },
     release(agents) {
       for (const id of agents) claims.release(id);
@@ -177,7 +164,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     deliver: sessions.deliver,
     stop: sessions.stop,
     async close(workspace, id) {
-      await records.find(workspace, id);
+      await records.findOpen(workspace, id);
       sessions.close(id);
       await permissions.expireAll(workspace, id);
       await records.patch(workspace, id, { closed: true, status: 'idle' });

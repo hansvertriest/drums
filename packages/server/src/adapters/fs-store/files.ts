@@ -6,10 +6,10 @@ import type { z } from 'zod';
 const isCode = (error: unknown, code: string) => (error as NodeJS.ErrnoException).code === code;
 
 /** Writes beside the target, so a crash never leaves half a file under the real name. */
-async function writeTemp(path: string, text: string): Promise<string> {
+async function writeTemp(path: string, content: string | Uint8Array): Promise<string> {
   await mkdir(dirname(path), { recursive: true });
   const temp = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temp, text);
+  await writeFile(temp, content);
   return temp;
 }
 
@@ -19,8 +19,8 @@ export async function writeAtomic(path: string, text: string): Promise<void> {
 }
 
 /** Temp file plus link: as atomic, and false instead of overwriting. This is what keeps versions immutable. */
-export async function writeNew(path: string, text: string): Promise<boolean> {
-  const temp = await writeTemp(path, text);
+export async function writeNew(path: string, content: string | Uint8Array): Promise<boolean> {
+  const temp = await writeTemp(path, content);
   try {
     await link(temp, path);
     return true;

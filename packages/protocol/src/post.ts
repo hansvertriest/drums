@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ImageName } from './image.js';
 import { Answer } from './artifact.js';
 import { CheckpointRepo } from './branch-map.js';
 import { Focus } from './focus.js';
@@ -35,10 +36,6 @@ export const CheckpointPost = Base.extend({
   version: VersionNumber,
   repos: z.array(CheckpointRepo),
 });
-
-/** A pasted image, kept in the workspace. The extension says its type. */
-export const ImageName = z.string().regex(/^[A-Za-z0-9-]{1,64}\.(png|jpg|gif|webp)$/);
-export type ImageName = z.infer<typeof ImageName>;
 
 /** What the user typed in the composer. */
 export const MessagePost = Base.extend({

@@ -76,10 +76,9 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
       }
       const name = branch ?? `drums/${id}`;
       const { repos, failedInstalls } = await code.attach(id, requested, name);
-      await store.createWorkspace({ id, goal, createdAt, agents: [], repos, branch: name, permissions: [], nudges: {} });
-      await artifacts.createEmpty(id, { title: branchMapArtifactKind.name, kind: branchMapArtifactKind.id });
       const { picks, title } = await pick(goal, true);
-      if (title) await store.updateWorkspace(id, (w) => ({ ...w, title }));
+      await store.createWorkspace({ id, goal, ...(title ? { title } : {}), createdAt, agents: [], repos, branch: name, permissions: [], nudges: {} });
+      await artifacts.createEmpty(id, { title: branchMapArtifactKind.name, kind: branchMapArtifactKind.id });
       await code.openAll(id);
       const [first] = await startAll(id, picks);
       if (first) {

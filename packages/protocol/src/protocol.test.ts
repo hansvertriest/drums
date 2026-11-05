@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DomainEvent, HealthResponse, Post, WorkspaceId, parseFrameMessage } from './index.js';
+import { DomainEvent, HealthResponse, ImageName, ImageType, MAX_IMAGE_BYTES, MAX_IMAGES, MAX_MESSAGE_BODY_BYTES, Post, WorkspaceId, imageExtension, imageTypeOf, parseFrameMessage } from './index.js';
 
 describe('protocol schemas', () => {
   it('accepts a known domain event and rejects an unknown type', () => {
@@ -43,5 +43,18 @@ describe('parseFrameMessage', () => {
       { source: 'drums-artifact', type: 'answers', answers: [{ name: 'q', label: 'Q', value: 'x'.repeat(20_001) }] },
     ];
     for (const data of bad) expect(parseFrameMessage(data)).toBeUndefined();
+  });
+});
+
+describe('images', () => {
+  it('has one table for types, names and limits', () => {
+    for (const type of ImageType.options) {
+      const name = `abc.${imageExtension(type)}`;
+      expect(ImageName.safeParse(name).success).toBe(true);
+      expect(imageTypeOf(name)).toBe(type);
+    }
+    expect(ImageName.safeParse('../x.png').success).toBe(false);
+    expect(ImageName.safeParse('x.svg').success).toBe(false);
+    expect(MAX_MESSAGE_BODY_BYTES).toBeGreaterThan(MAX_IMAGES * MAX_IMAGE_BYTES);
   });
 });

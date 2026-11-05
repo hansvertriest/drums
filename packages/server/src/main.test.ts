@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HealthResponse, VersionResponse, WorkspaceList, WorkspaceState } from '@drums/protocol';
+import { HealthResponse, MAX_MESSAGE_BODY_BYTES, VersionResponse, WorkspaceList, WorkspaceState } from '@drums/protocol';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { main, type RunningDrums } from './main.js';
 import { fakeBackend } from './testing/fake-backend.js';
@@ -125,6 +126,22 @@ describe('the API from request to agent and back', () => {
     expect(sent.status).toBe(409);
     expect(await sent.json()).toMatchObject({ error: expect.stringContaining('working') });
     expect((await send('POST', `/api/workspaces/${ws}/agents/${agent}/messages`, { text: 'hi' })).status).toBe(409);
+  });
+
+  it('refuses a message body over the limit by its length, without reading it', async () => {
+    const { ws, agent } = await createWorkspace();
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      const url = new URL(`/api/workspaces/${ws}/agents/${agent}/messages`, drums.url);
+      const headers = { 'content-type': 'application/json', 'content-length': MAX_MESSAGE_BODY_BYTES + 1 };
+      const req = request(url, { method: 'POST', headers }, (response) => {
+        resolve(response.statusCode);
+        response.resume();
+        req.destroy();
+      });
+      req.on('error', reject);
+      req.flushHeaders();
+    });
+    expect(status).toBe(413);
   });
 
   it('stops an agent', async () => {

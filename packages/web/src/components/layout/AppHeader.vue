@@ -5,6 +5,7 @@ import { useAnswers } from '../../stores/answers';
 import { useMap } from '../../stores/map';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
+import { workspaceName } from '../../workspace-name';
 import OpenPrs from '../dialogs/OpenPrs.vue';
 import SendPopover from '../dialogs/SendPopover.vue';
 
@@ -51,7 +52,7 @@ const archive = () => {
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" /></svg>
     </button>
     <div class="title">
-      <h1 :title="workspaces.current?.goal">{{ workspaces.current?.title ?? workspaces.current?.goal ?? 'drums' }}</h1>
+      <h1 :title="workspaces.current?.goal">{{ workspaces.current ? workspaceName(workspaces.current) : 'drums' }}</h1>
       <p>{{ subline }}</p>
     </div>
     <span v-if="status" class="pill" :class="`st-${status}`"><i />{{ statusLabel }}</span>

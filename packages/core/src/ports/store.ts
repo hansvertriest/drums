@@ -34,6 +34,8 @@ export interface Store {
   createArtifact(workspace: WorkspaceId, artifact: Omit<ArtifactMeta, 'id'>): Promise<ArtifactMeta>;
   listArtifacts(workspace: WorkspaceId): Promise<ArtifactMeta[]>;
   getArtifact(workspace: WorkspaceId, id: ArtifactId): Promise<ArtifactMeta | undefined>;
+  /** Undefined if there is no such artifact. */
+  setArtifactArchived(workspace: WorkspaceId, id: ArtifactId, archived: boolean): Promise<ArtifactMeta | undefined>;
 
   /** False if that version number is taken. Versions are immutable: nothing ever rewrites one. */
   addVersion(workspace: WorkspaceId, artifact: ArtifactId, version: ArtifactVersion, content: string): Promise<boolean>;

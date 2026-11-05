@@ -3,7 +3,7 @@ import { request } from 'node:http';
 import { delimiter, join } from 'node:path';
 import type { RolePicker } from '@drums/core';
 import { MapState, ProjectList, WorkspaceList, WorkspaceState } from '@drums/protocol';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { main, type RunningDrums } from './main.js';
 import { fakeBackend } from './testing/fake-backend.js';
 import { createTempRepo, runGit, tempDirs, writeFile } from './testing/temp-repo.js';
@@ -45,6 +45,9 @@ afterAll(async () => {
   dirs.cleanup();
 });
 
+/** Real git and a real dyffle session per workspace, all ticking in this one process: on a busy machine a test takes far past the default 5 s. */
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
 const get = (path: string, init?: RequestInit) => fetch(new URL(path, drums.url), init);
 const post = (path: string, body: unknown) => get(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -56,6 +59,18 @@ async function create(goal: string, repos = [{ name: 'shop', base: 'main' }], br
 }
 
 type Session = (typeof fake.sessions)[number];
+/** Waits on what the test is about, not on a fixed time: the end of a turn runs git, which takes as long as it takes. */
+async function until(check: () => Promise<boolean>, what: string) {
+  for (const deadline = Date.now() + 20_000; Date.now() < deadline; await new Promise((resolve) => setTimeout(resolve, 10))) {
+    if (await check()) return;
+  }
+  throw new Error(`Timed out waiting for ${what}.`);
+}
+const statuses = async (ws: string) => WorkspaceState.parse(await (await get(`/api/workspaces/${ws}`)).json()).workspace.agents.map((agent) => agent.status);
+/** The agent's turn is over and it can take a message: the claim goes before the status changes. */
+const turnOver = (ws: string) => until(async () => (await statuses(ws)).every((status) => status !== 'running'), 'the turn to end');
+const waitingOnUser = (ws: string) => until(async () => (await statuses(ws)).includes('input'), 'the permission request');
+
 const tool = (session: Session, id: string, args: unknown) => session.options.tools.find((t) => t.id === id)!.call(args);
 /** `fetch` won't send another `Host`. */
 const statusWithHost = (path: string, host: string) =>
@@ -251,14 +266,14 @@ describe('Send with code comments', () => {
     session.emit({ type: 'turn.ended', outcome: 'success' });
     const comment = { id: 'c1', path: 'src/math.ts', line: 2, side: 'RIGHT', body: 'Why c?', code: '  return a + b + c;', symbol: 'src/math.ts#add' };
     await get(`${url}review.json?key=post-1`, { method: 'PUT', body: JSON.stringify({ body: '', comments: [comment], viewed: {} }) });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await turnOver(ws);
     expect((await post(`/api/workspaces/${ws}/send`, {})).status).toBe(200);
     expect(session.received.at(-1)).toContain('<drums-feedback repo="shop">');
     expect(session.received.at(-1)).toContain('## Post #1: T');
     expect(session.received.at(-1)).toContain('Why c?');
     expect((await mapOf(ws)).repos[0]!.pendingComments).toBe(0);
     session.emit({ type: 'turn.ended', outcome: 'success' });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await turnOver(ws);
     expect((await post(`/api/workspaces/${ws}/send`, {})).status).toBe(400);
   });
 });
@@ -268,7 +283,7 @@ describe('permission route', () => {
     const { ws, session, state } = await create('Permissions');
     const agent = state.workspace.agents[0]!.id;
     session.emit({ type: 'permission.requested', id: 'p1', tool: 'Bash', title: 'Run', detail: 'command: x' });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitingOnUser(ws);
     const reloaded = WorkspaceState.parse(await (await get(`/api/workspaces/${ws}`)).json());
     expect(reloaded.workspace.permissions[0]).toMatchObject({ id: 'p1', status: 'pending' });
     expect(reloaded.workspace.agents[0]!.status).toBe('input');
@@ -289,7 +304,7 @@ describe('PRs', () => {
     writeFile(otherTree, 'src/extra.ts', 'export const extra = 1;\n');
     await tool(session, 'checkpoint', { title: 'T', message: 'm' });
     session.emit({ type: 'turn.ended', outcome: 'success' });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await turnOver(ws);
     const drafts = await (await get(`/api/workspaces/${ws}/prs`)).json();
     expect(drafts.title).toBe('Paging across repos');
     const response = await post(`/api/workspaces/${ws}/prs`, {
@@ -337,7 +352,7 @@ describe('restart', () => {
     writeFile(worktree, 'src/math.ts', CHANGED);
     await tool(session, 'checkpoint', { title: 'Before', message: 'm' });
     session.emit({ type: 'permission.requested', id: 'gone', tool: 'Bash', title: 'Run', detail: 'x' });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitingOnUser(ws);
     const again = await main({ port: 0, webRoot: join(parent, 'web'), home: join(parent, 'home'), workspacesRoot: join(parent, 'ws'), agentBackend: fake.backend, rolePicker: pickCoder });
     try {
       const base = new URL(again.url);

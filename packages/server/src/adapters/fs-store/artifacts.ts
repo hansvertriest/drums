@@ -6,7 +6,7 @@ import type { createPaths } from './paths.js';
 
 type ArtifactStore = Pick<
   Store,
-  'createArtifact' | 'listArtifacts' | 'getArtifact' | 'addVersion' | 'listVersions' | 'readVersion'
+  'createArtifact' | 'listArtifacts' | 'getArtifact' | 'setArtifactArchived' | 'addVersion' | 'listVersions' | 'readVersion'
 >;
 
 const listDir = (dir: string) =>
@@ -44,6 +44,16 @@ export function createArtifactStore(paths: ReturnType<typeof createPaths>): Arti
       return metas.filter((meta) => meta !== undefined);
     },
     getArtifact: async (workspace, id) => readJson(paths.meta(workspace, id), ArtifactMeta),
+    setArtifactArchived: (workspace, id, archived) =>
+      inTurn(id, async () => {
+        const meta = await readJson(paths.meta(workspace, id), ArtifactMeta);
+        if (!meta) return undefined;
+        const next: ArtifactMeta = { ...meta };
+        if (archived) next.archived = true;
+        else delete next.archived;
+        await writeAtomic(paths.meta(workspace, id), toJson(next));
+        return next;
+      }),
     /**
      * `v3.json` is what makes a version exist, so it goes last. An `.html` without one is
      * what a crash between the two writes leaves: never published, so it can be replaced.

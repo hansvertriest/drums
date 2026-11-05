@@ -2,7 +2,6 @@ import { createSdkMcpServer, tool, type CanUseTool, type HookCallback, type Opti
 import type { AgentSessionOptions, SystemAccess } from '@drums/core';
 import { toMcpTools } from '../../mcp/sdk-tools.js';
 import { qualifiedToolName, SERVER_NAME } from './messages.js';
-import { boundReads, READ_TOOLS } from './read-bounds.js';
 
 /** Built-ins that wait on a person at the terminal. In drums, request_input does that. */
 const TERMINAL_ONLY_TOOLS = ['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode'];
@@ -31,7 +30,7 @@ export interface PermissionChoices {
   classifier: boolean;
 }
 
-const BY_ACCESS: Record<SystemAccess, (allowed: string[], choices: PermissionChoices, cwd: string) => Partial<Options>> = {
+const BY_ACCESS: Record<SystemAccess, (allowed: string[], choices: PermissionChoices) => Partial<Options>> = {
   // Exactly the role's tools. `tools: []` takes every built-in out of the session, including
   // subagents and tool search; `dontAsk` and `permissionPrompts: 'none'` turn whatever would prompt into a denial.
   'tools-only': (allowed) => ({
@@ -39,14 +38,6 @@ const BY_ACCESS: Record<SystemAccess, (allowed: string[], choices: PermissionCho
     permissionMode: 'dontAsk',
     permissionPrompts: 'none',
     hooks: { PreToolUse: [{ hooks: [denyOtherTools(allowed)] }] },
-  }),
-  // As above, plus the read tools. Approved up front, so `boundReads` is what keeps them in the workspace folder.
-  'read-files': (allowed, _choices, cwd) => ({
-    tools: READ_TOOLS,
-    allowedTools: [...allowed, ...READ_TOOLS],
-    permissionMode: 'dontAsk',
-    permissionPrompts: 'none',
-    hooks: { PreToolUse: [{ hooks: [denyOtherTools([...allowed, ...READ_TOOLS]), boundReads(cwd)] }] },
   }),
   // Everything the user's own Claude Code has: every built-in, their MCP servers, skills, plugins, hooks and
   // CLAUDE.md. `auto` has a classifier approve or deny each call, and what it can't decide comes to `canUseTool`.
@@ -75,7 +66,7 @@ export function sessionOptions(session: AgentSessionOptions, model: string, choi
     allowedTools: allowed,
     settingSources: [],
     strictMcpConfig: true,
-    ...BY_ACCESS[session.access](allowed, choices, session.cwd),
+    ...BY_ACCESS[session.access](allowed, choices),
     mcpServers: {
       [SERVER_NAME]: createSdkMcpServer({
         name: SERVER_NAME,

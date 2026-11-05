@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import { AgentId, ArtifactId, ArtifactKindId, VersionNumber } from './ids.js';
 
-/** `meta.json`: what never changes about an artifact. */
+/** `meta.json`: what is true of an artifact whatever its versions. */
 export const ArtifactMeta = z.object({
   id: ArtifactId,
   title: z.string().min(1),
   kind: ArtifactKindId,
   createdAt: z.iso.datetime(),
+  /** Put away by the user: out of the tabs and the overview, until it is restored or gets a new version. */
+  archived: z.boolean().optional(),
 });
 export type ArtifactMeta = z.infer<typeof ArtifactMeta>;
 
@@ -23,8 +25,6 @@ export const Artifact = ArtifactMeta.extend({
   /** Which frontend renderer shows it; named by the artifact kind. */
   renderer: z.string().min(1),
   versions: z.array(ArtifactVersion),
-  /** Put away by the user: out of the tabs and the overview, until it is restored or gets a new version. */
-  archived: z.boolean().optional(),
 });
 export type Artifact = z.infer<typeof Artifact>;
 

@@ -135,6 +135,7 @@ export interface RoleDefinition {
   prompt: string;                   // the role prompt, including its work loop
   tools: ToolId[];                  // which registered tools it gets
   needsRepo?: boolean;              // Coder: true
+  access?: SystemAccess;            // what it can touch besides its tools (§4.1)
   defaultArtifactKind?: ArtifactKindId;
 }
 ```
@@ -207,6 +208,8 @@ web/src/
 - **Saving:** the session id is stored, so agents resume after a restart.
 - **Status:** `running` while a turn is in progress, `review` when it ends normally, `input` after `request_input` or while a permission prompt waits, `idle` after Stop or a PR.
 - **Stop** interrupts the session.
+- **Close** ends the session for good and takes the agent's tab away. What it posted stays, and its name still shows on it.
+- **Access:** `shell-and-files`, which every role has, is the user's own Claude Code setup: shell, files, web, MCP servers, skills, plugins, hooks and CLAUDE.md. Only `AskUserQuestion` and plan mode stay off, since `request_input` does that job. Sessions run in `auto`: a classifier approves or denies each call, and what it can't decide sets the agent to `input` with an allow/deny row in its thread. Without `auto` on the account or model, everything that needs approval gets a row. The working directory is not a security boundary. `tools-only` remains for a role that should have nothing but its tools. Changing code stays the Coder's job, by its prompt.
 - **Tool steps** stream as events and fill the Steps view.
 
 > The Claude Agent SDK's exact function and option names must be checked against its docs (`code.claude.com/docs/en/agent-sdk`) when writing `adapters/claude`. Nothing outside that folder may depend on them.
@@ -336,10 +339,11 @@ All state is files, so it is inspectable and survives restarts. Behind the `Stor
   .drums/
     workspace.json            goal, repos, branch, bases, agents (role, session id, status)
     posts/0007.json           the feed (one file per post)
-    artifacts/<id>/meta.json  title, kind
+    artifacts/<id>/meta.json  title, kind, whether it is archived
     artifacts/<id>/v3.html    versions are immutable
     artifacts/<id>/v3.json    author, note, time
     answers/<id>-v3.json      pending answers, so a reload keeps them
+    images/<id>.png           images pasted into the composer, immutable
   <repo>/                     a worktree per attached repo (its own .dyffle/ inside)
 ```
 
@@ -357,9 +361,15 @@ POST   /api/workspaces                      { goal, repos: [{ name, base }], bra
 GET    /api/workspaces/:ws                  full state for one workspace
 GET    /api/workspaces/:ws/stream           SSE: DomainEvent
 POST   /api/workspaces/:ws/agents           { instruction }  → role picked by drums
-POST   /api/workspaces/:ws/agents/:a/messages   { text, focus? }
+POST   /api/workspaces/:ws/archive          stops its agents; worktrees, branches and posts stay
+POST   /api/workspaces/:ws/restore
+POST   /api/workspaces/:ws/agents/:a/messages   { text, focus?, images? }
 POST   /api/workspaces/:ws/agents/:a/stop
+POST   /api/workspaces/:ws/agents/:a/close
+GET    /api/workspaces/:ws/images/:name     a pasted image
 GET    /api/workspaces/:ws/artifacts/:id/versions/:v
+POST   /api/workspaces/:ws/artifacts/:id/archive   a new version brings it back
+POST   /api/workspaces/:ws/artifacts/:id/restore
 PUT    /api/workspaces/:ws/artifacts/:id/answers  { version, answers }
 POST   /api/workspaces/:ws/send             { overall? }  → routes pending feedback
 GET    /api/workspaces/:ws/map/...          the dyffle LiveSource data for the map iframe
@@ -408,9 +418,8 @@ Each milestone ends in something usable. Don't start the next before the current
 
 ## 12. Not decided yet
 
-- How per-agent permission prompts look in the UI (Needs input plus an allow/deny row in the thread is the current idea).
 - Cost and usage display per agent and per workspace.
-- Archiving and deleting workspaces, including removing worktrees.
+- Deleting workspaces, including removing worktrees. Archiving keeps them.
 - Splitting the dyffle map into an importable module, replacing the iframe (later, in dyffle).
 
 ## 13. Not in scope

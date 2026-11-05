@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRailResize } from '../../composables/useRailResize';
 import { RAIL_WIDTH, useUi } from '../../stores/ui';
 import AgentTabs from '../chat/AgentTabs.vue';
 import Composer from '../chat/Composer.vue';
@@ -7,22 +8,8 @@ import Thread from '../chat/Thread.vue';
 
 const ui = useUi();
 const rail = ref<HTMLElement>();
-const dragging = ref(false);
-
-/** Captured, so the drag goes on over the artifact frames. */
-const startDrag = (event: PointerEvent) => {
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  dragging.value = true;
-};
-const drag = (event: PointerEvent) => {
-  if (dragging.value && rail.value) ui.setRailWidth(event.clientX - rail.value.getBoundingClientRect().left);
-};
-const onKey = (event: KeyboardEvent) => {
-  const step = { ArrowLeft: -24, ArrowRight: 24 }[event.key];
-  if (!step) return;
-  event.preventDefault();
-  ui.setRailWidth(ui.railWidth + step);
-};
+const resize = useRailResize(rail);
+const { dragging } = resize;
 </script>
 
 <template>
@@ -41,12 +28,12 @@ const onKey = (event: KeyboardEvent) => {
       :aria-valuenow="ui.railWidth"
       :aria-valuemin="RAIL_WIDTH.min"
       :aria-valuemax="RAIL_WIDTH.max"
-      @pointerdown="startDrag"
-      @pointermove="drag"
-      @pointerup="dragging = false"
-      @pointercancel="dragging = false"
+      @pointerdown="resize.start"
+      @pointermove="resize.move"
+      @pointerup="resize.end"
+      @pointercancel="resize.end"
       @dblclick="ui.setRailWidth(RAIL_WIDTH.default)"
-      @keydown="onKey"
+      @keydown="resize.key"
     />
   </section>
 </template>

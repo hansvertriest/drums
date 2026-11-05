@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ImageType } from '@drums/protocol';
 import { computed, ref } from 'vue';
 import { api } from '../../api/client';
+import { usePastedImages } from '../../composables/usePastedImages';
 import { useAgents } from '../../stores/agents';
 import { useFocus } from '../../stores/focus';
 import { useThreads } from '../../stores/threads';
@@ -15,10 +15,7 @@ const threads = useThreads();
 const focus = useFocus();
 const ui = useUi();
 const text = ref('');
-/** Pasted, waiting to go with the next message. `url` is the data URL, for the preview and to send. */
-const images = ref<Array<{ type: ImageType; url: string }>>([]);
-const MAX_IMAGES = 8;
-const MAX_IMAGE_BYTES = 10_000_000;
+const { images, paste, remove, take } = usePastedImages((message) => ui.report(message));
 
 const agent = computed(() => agents.current);
 const running = computed(() => agent.value?.status === 'running');
@@ -39,34 +36,15 @@ const canSend = computed(() => (text.value.trim() !== '' || images.value.length 
 
 const send = async () => {
   const message = text.value.trim();
-  const pasted = images.value;
   if (!canSend.value || !workspaces.currentId) return;
+  const { upload, restore } = take();
   text.value = '';
-  images.value = [];
   try {
-    const upload = pasted.map(({ type, url }) => ({ type, data: url.slice(url.indexOf(',') + 1) }));
     await api.sendMessage(workspaces.currentId, agent.value!.id, message, focus.focus, upload);
   } catch (error) {
     text.value = message;
-    images.value = pasted;
+    restore();
     ui.report(error);
-  }
-};
-
-/** Images go with the message; text pastes as it always did. */
-const paste = (event: ClipboardEvent) => {
-  const files = [...(event.clipboardData?.files ?? [])].filter((file) => ImageType.safeParse(file.type).success);
-  if (files.length === 0) return;
-  event.preventDefault();
-  for (const file of files) {
-    if (images.value.length >= MAX_IMAGES) return ui.report(`At most ${MAX_IMAGES} images per message.`);
-    if (file.size > MAX_IMAGE_BYTES) {
-      ui.report(`${file.name} is over 10 MB.`);
-      continue;
-    }
-    const reader = new FileReader();
-    reader.onload = () => images.value.push({ type: file.type as ImageType, url: reader.result as string });
-    reader.readAsDataURL(file);
   }
 };
 
@@ -83,9 +61,9 @@ const stop = () => {
     </div>
     <FocusChip />
     <div v-if="images.length > 0" class="images">
-      <span v-for="(image, i) in images" :key="image.url" class="image">
+      <span v-for="(image, i) in images" :key="image.id" class="image">
         <img :src="image.url" alt="Pasted image" />
-        <button type="button" :aria-label="`Remove image ${i + 1}`" @click="images.splice(i, 1)">×</button>
+        <button type="button" :aria-label="`Remove image ${i + 1}`" @click="remove(image.id)">×</button>
       </span>
     </div>
     <div class="box">

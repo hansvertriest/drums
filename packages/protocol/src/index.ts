@@ -6,6 +6,7 @@ export * from './bridge.js';
 export * from './events.js';
 export * from './focus.js';
 export * from './ids.js';
+export * from './image.js';
 export * from './permission.js';
 export * from './post.js';
 export * from './workspace.js';

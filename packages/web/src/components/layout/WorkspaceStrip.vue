@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import { useNews } from '../../stores/news';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
+import { workspaceName } from '../../workspace-name';
 
 const workspaces = useWorkspaces();
 const ui = useUi();
@@ -12,8 +13,8 @@ const showArchived = ref(false);
 const active = computed(() => workspaces.workspaces.filter((workspace) => !workspace.archived));
 const archived = computed(() => workspaces.workspaces.filter((workspace) => workspace.archived));
 
-const initials = ({ title, goal }: WorkspaceSummary) =>
-  (title ?? goal)
+const initials = (workspace: WorkspaceSummary) =>
+  workspaceName(workspace)
     .split(/\s+/)
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? '')
@@ -39,7 +40,7 @@ const open = (id: string) => {
       >
         <span class="icon">{{ initials(workspace) }}<i :class="`st-${workspace.status}`" /><b v-if="workspace.id !== workspaces.currentId && news.hasNews(workspace)" class="news" title="New since you looked" /></span>
         <span class="text">
-          <span class="goal" :title="workspace.goal">{{ workspace.title ?? workspace.goal }}</span>
+          <span class="goal" :title="workspace.goal">{{ workspaceName(workspace) }}</span>
           <span class="meta">{{ workspace.status }}<template v-if="workspace.lastRole"> · {{ workspace.lastRole }}</template><template v-if="workspace.additions !== undefined"> · +{{ workspace.additions }} −{{ workspace.deletions }}</template></span>
         </span>
       </button>

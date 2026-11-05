@@ -52,6 +52,13 @@ export function createMemoryStore(): Store {
     },
     listArtifacts: async (workspace) => clone(artifacts.get(workspace) ?? []),
     getArtifact: async (workspace, id) => clone(artifacts.get(workspace)?.find((a) => a.id === id)),
+    async setArtifactArchived(workspace, id, archived) {
+      const meta = artifacts.get(workspace)?.find((a) => a.id === id);
+      if (!meta) return undefined;
+      if (archived) meta.archived = true;
+      else delete meta.archived;
+      return clone(meta);
+    },
     async addVersion(workspace, artifact, meta, content) {
       const list = versions.get(key(workspace, artifact)) ?? [];
       if (list.some((v) => v.meta.version === meta.version)) return false;

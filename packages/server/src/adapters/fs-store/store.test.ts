@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Store } from '@drums/core';
 import type { Workspace } from '@drums/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -37,6 +37,17 @@ describe('workspaces', () => {
     expect(await store.readImage('w1', 'i2.png')).toBeUndefined();
     await expect(store.saveImage('w1', 'i1.png', new Uint8Array([8]))).rejects.toThrow();
     await expect(store.saveImage('w1', '../x.png', new Uint8Array([8]))).rejects.toThrow();
+    // Temp plus link, like every other write: nothing is left beside the image.
+    expect(readdirSync(dirname(path))).toEqual(['i1.png']);
+  });
+
+  it('keeps whether an artifact is archived in its meta', async () => {
+    const meta = await store.createArtifact('w1', { title: 'T', kind: 'html', createdAt: new Date(0).toISOString() });
+    expect(await store.setArtifactArchived('w1', meta.id, true)).toEqual({ ...meta, archived: true });
+    expect((await store.getArtifact('w1', meta.id))?.archived).toBe(true);
+    expect(await store.setArtifactArchived('w1', meta.id, false)).toEqual(meta);
+    expect((await store.getArtifact('w1', meta.id))?.archived).toBeUndefined();
+    expect(await store.setArtifactArchived('w1', 'a99', true)).toBeUndefined();
   });
 
   it('is empty when the root does not exist yet', async () => {

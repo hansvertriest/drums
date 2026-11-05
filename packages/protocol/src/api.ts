@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ImageType, MAX_IMAGE_BASE64, MAX_IMAGES } from './image.js';
 import { AnswerSet, Answers, Artifact, ArtifactVersion } from './artifact.js';
 import { Focus } from './focus.js';
 import { AgentId, ArtifactKindId, BranchName, RepoName, RoleId, ToolId, VersionNumber } from './ids.js';
@@ -47,15 +48,12 @@ export type WorkspaceState = z.infer<typeof WorkspaceState>;
 export const AddAgentRequest = z.object({ instruction: z.string().trim().min(1).max(20_000) });
 export type AddAgentRequest = z.infer<typeof AddAgentRequest>;
 
-export const ImageType = z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-export type ImageType = z.infer<typeof ImageType>;
-
-/** `POST /api/workspaces/:ws/agents/:a/messages`. Images as base64, up to about 10 MB each. */
+/** `POST /api/workspaces/:ws/agents/:a/messages`. Images as base64. */
 export const SendMessageRequest = z
   .object({
     text: z.string().trim().max(100_000),
     focus: Focus.optional(),
-    images: z.array(z.object({ type: ImageType, data: z.base64().max(14_000_000) })).max(8).default([]),
+    images: z.array(z.object({ type: ImageType, data: z.base64().max(MAX_IMAGE_BASE64) })).max(MAX_IMAGES).default([]),
   })
   .refine((request) => request.text.length > 0 || request.images.length > 0, 'Write a message or add an image.');
 export type SendMessageRequest = z.infer<typeof SendMessageRequest>;
