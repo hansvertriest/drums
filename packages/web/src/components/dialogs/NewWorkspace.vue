@@ -93,7 +93,7 @@ select,
 #branch {
   height: 32px;
   padding: 0 8px;
-  border: 1px solid var(--stroke);
+  border: 0;
   border-radius: 8px;
   background: var(--bg);
   color: inherit;

@@ -95,7 +95,7 @@ input:not([type='checkbox']) {
   width: 100%;
   height: 36px;
   padding: 0 10px;
-  border: 1px solid var(--stroke);
+  border: 0;
   border-radius: 10px;
   background: var(--bg);
   color: inherit;
@@ -104,7 +104,7 @@ input:not([type='checkbox']) {
 .repo {
   margin-top: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  background: var(--bg);
   border-radius: 12px;
 }
 .pick {

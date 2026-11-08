@@ -4,7 +4,9 @@ import { computed, ref } from 'vue';
 import { useNews } from '../../stores/news';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
-import { workspaceName } from '../../workspace-name';
+import { workspaceName } from '../../composables/useWorkspaceSummary';
+import StatusDot from '../shared/StatusDot.vue';
+import AppLogo from './AppLogo.vue';
 
 const workspaces = useWorkspaces();
 const ui = useUi();
@@ -29,6 +31,7 @@ const open = (id: string) => {
 <template>
   <div v-if="ui.drawerOpen" class="scrim" @click="ui.drawerOpen = false" />
   <aside class="strip" :class="{ open: ui.drawerOpen }" aria-label="Workspaces">
+    <div class="brand"><AppLogo />drums</div>
     <div class="list">
       <button
         v-for="workspace in showArchived ? [...active, ...archived] : active"
@@ -38,7 +41,7 @@ const open = (id: string) => {
         :class="{ on: workspace.id === workspaces.currentId, archived: workspace.archived }"
         @click="open(workspace.id)"
       >
-        <span class="icon">{{ initials(workspace) }}<i :class="`st-${workspace.status}`" /><b v-if="workspace.id !== workspaces.currentId && news.hasNews(workspace)" class="news" title="New since you looked" /></span>
+        <span class="icon">{{ initials(workspace) }}<StatusDot class="corner" :status="workspace.status" /><b v-if="workspace.id !== workspaces.currentId && news.hasNews(workspace)" class="news" title="New since you looked" /></span>
         <span class="text">
           <span class="goal" :title="workspace.goal">{{ workspaceName(workspace) }}</span>
           <span class="meta">{{ workspace.status }}<template v-if="workspace.lastRole"> · {{ workspace.lastRole }}</template><template v-if="workspace.additions !== undefined"> · +{{ workspace.additions }} −{{ workspace.deletions }}</template></span>
@@ -55,24 +58,23 @@ const open = (id: string) => {
 </template>
 
 <style scoped>
-/* A 60px column that opens over the page on hover, without moving anything. */
+/* A 56px column that opens over the page on hover, without moving anything. */
 .strip {
   position: absolute;
   z-index: 30;
-  inset: 60px auto 0 0;
-  width: 60px;
+  inset: 0 auto 0 0;
+  width: 56px;
   display: flex;
   flex-direction: column;
   /* Not `hidden`: that can still be scrolled, by a focus or a click while it opens, and then it stays sideways. */
   overflow: clip;
   background: var(--surface);
-  border-right: 1px solid var(--line);
   transition: width 0.18s;
 }
 @media (min-width: 901px) {
   .strip:hover,
   .strip:has(:focus-visible) {
-    width: 300px;
+    width: 290px;
     box-shadow: 8px 0 32px var(--shadow);
   }
 }
@@ -84,11 +86,11 @@ const open = (id: string) => {
     inset: 0 auto 0 0;
     width: min(300px, 86vw);
     padding-top: env(safe-area-inset-top, 0px);
-    box-shadow: 0 0 40px var(--shadow);
     transform: translateX(-102%);
     transition: transform 0.2s;
   }
   .strip.open {
+    box-shadow: 0 0 40px var(--shadow);
     transform: none;
   }
 }
@@ -103,15 +105,26 @@ const open = (id: string) => {
     transition: none;
   }
 }
+.brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 290px;
+  height: 52px;
+  padding-left: 15px;
+  font: 600 16px var(--sans);
+  white-space: nowrap;
+}
 .list {
   flex: 1;
   /* As wide as the strip gets, with the strip clipping it: there is nothing to scroll sideways, however narrow it is now. */
-  width: 300px;
+  width: 290px;
   max-width: 100vw;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px;
+  padding: 0 8px;
   overflow: hidden auto;
   scrollbar-width: none;
   min-height: 0;
@@ -119,11 +132,11 @@ const open = (id: string) => {
 .item {
   display: flex;
   flex: none;
-  align-items: flex-start;
+  align-items: center;
   /* Puts the text just past the edge of the narrow strip. */
-  gap: 14px;
-  width: 280px;
-  padding: 6px 4px;
+  gap: 12px;
+  width: 274px;
+  padding: 6px 2px;
   border: 0;
   border-radius: 10px;
   background: none;
@@ -134,7 +147,7 @@ const open = (id: string) => {
 }
 .toggle {
   flex: none;
-  width: 280px;
+  width: 274px;
   margin-top: 4px;
   padding: 6px 4px 6px 50px;
   border: 0;
@@ -151,50 +164,45 @@ const open = (id: string) => {
 .item:hover {
   background: var(--surface-2);
 }
-.item.on {
+/* While closed, only its icon says which workspace is open. */
+.strip.open .item.on {
   background: var(--accent-soft);
+}
+@media (min-width: 901px) {
+  .strip:hover .item.on,
+  .strip:has(:focus-visible) .item.on {
+    background: var(--accent-soft);
+  }
 }
 .icon {
   position: relative;
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--bg);
-  font: 600 11.5px var(--mono);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font: 600 12px var(--mono);
   color: var(--muted);
 }
 .item.on .icon {
-  border-color: var(--accent);
+  background: var(--accent-soft);
   color: var(--accent);
 }
-.icon i {
+.icon .corner {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 12px;
-  height: 12px;
+  right: -2px;
+  bottom: -2px;
+  width: 11px;
+  height: 11px;
   border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--line);
-}
-.icon i.st-running {
-  background: var(--accent);
-}
-.icon i.st-input {
-  background: var(--mod);
-}
-.icon i.st-review {
-  background: var(--add);
 }
 .news {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: -2px;
+  right: -2px;
   width: 10px;
   height: 10px;
   border: 2px solid var(--surface);
@@ -224,9 +232,9 @@ const open = (id: string) => {
   align-items: center;
   gap: 12px;
   flex: none;
-  width: 280px;
-  margin: 0 10px 12px;
-  padding: 4px;
+  width: 274px;
+  margin: 0 8px 10px;
+  padding: 6px 2px;
   border: 0;
   border-radius: 10px;
   background: none;
@@ -239,14 +247,30 @@ const open = (id: string) => {
 }
 .plus {
   flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--on-accent);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 400;
+}
+/* The drawer is as wide as the screen allows, so its contents follow it. */
+@media (max-width: 900px) {
+  .brand,
+  .list {
+    width: auto;
+  }
+  .item,
+  .toggle {
+    width: 100%;
+  }
+  .new {
+    width: auto;
+    margin-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
 }
 </style>

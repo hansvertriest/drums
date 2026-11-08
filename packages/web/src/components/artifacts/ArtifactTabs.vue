@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { Artifact } from '@drums/protocol';
 import { computed, ref } from 'vue';
+import { rendererFor } from '../../renderers';
 import { useAnswers } from '../../stores/answers';
 import { useArtifacts } from '../../stores/artifacts';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
+
+const MENU_WIDTH = 300;
 
 const artifacts = useArtifacts();
 const answers = useAnswers();
@@ -14,19 +17,41 @@ const showArchived = ref(false);
 const archivedCount = computed(() => artifacts.artifacts.length - artifacts.shown.length);
 
 const setArchived = (artifact: Artifact, archived: boolean) => void workspaces.setArtifactArchived(artifact.id, archived).catch(ui.report);
+
+const isCurrent = (artifact: Artifact) => artifact.id === artifacts.currentId;
+const hasPicker = (artifact: Artifact) => artifact.versions.length > 0 && !rendererFor(artifact.renderer)?.ownVersions;
+const shownVersion = (artifact: Artifact) => (isCurrent(artifact) ? artifacts.viewing : artifact.versions.at(-1)?.version);
+
+/** A tab opens its artifact; the tab that is already open lists its versions. */
+const select = (artifact: Artifact, event: MouseEvent) => {
+  if (!isCurrent(artifact)) {
+    artifacts.open(artifact.id);
+    return;
+  }
+  if (!hasPicker(artifact)) return;
+  if (ui.versionsAt) {
+    ui.versionsAt = undefined;
+    return;
+  }
+  const tab = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  ui.versionsAt = { left: Math.max(8, Math.min(tab.left, window.innerWidth - MENU_WIDTH - 8)), top: tab.bottom + 6 };
+};
 </script>
 
 <template>
   <div class="tabs" role="tablist">
-    <span
-      v-for="artifact in showArchived ? artifacts.artifacts : artifacts.shown"
-      :key="artifact.id"
-      class="tab"
-      :class="{ on: artifact.id === artifacts.currentId, archived: artifact.archived }"
-    >
-      <button type="button" role="tab" :aria-selected="artifact.id === artifacts.currentId" @click="artifacts.open(artifact.id)">
+    <span v-for="artifact in showArchived ? artifacts.artifacts : artifacts.shown" :key="artifact.id" class="tab" :class="{ on: isCurrent(artifact), archived: artifact.archived }">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="isCurrent(artifact)"
+        :aria-haspopup="isCurrent(artifact) && hasPicker(artifact) ? 'dialog' : undefined"
+        :aria-expanded="isCurrent(artifact) && hasPicker(artifact) ? ui.versionsAt !== undefined : undefined"
+        :data-version-trigger="isCurrent(artifact) && hasPicker(artifact) ? '' : undefined"
+        @click="select(artifact, $event)"
+      >
         {{ artifact.title }}
-        <span v-if="artifact.versions.length > 0" class="version">v{{ artifact.versions.at(-1)?.version }}</span>
+        <span v-if="hasPicker(artifact)" class="version" :class="{ open: isCurrent(artifact) }">v{{ shownVersion(artifact) }}</span>
         <span v-if="answers.pendingFor(artifact.id).length" class="count">{{ answers.pendingFor(artifact.id).length }}</span>
       </button>
       <button
@@ -49,27 +74,22 @@ const setArchived = (artifact: Artifact, archived: boolean) => void workspaces.s
 
 <style scoped>
 .tabs {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
-  gap: 4px;
-  flex: none;
-  padding: 8px 16px 0;
+  align-items: center;
+  gap: 2px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
   scrollbar-width: none;
 }
 .tab {
   flex: none;
   display: flex;
   align-items: center;
-  margin-bottom: -1px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
+  border-radius: 8px;
 }
 .tab.on {
-  background: var(--bg);
-  border-color: var(--line);
+  background: var(--surface-2);
 }
 .tab.archived {
   opacity: 0.6;
@@ -78,41 +98,42 @@ button {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 12px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
   border: 0;
+  border-radius: 8px;
   background: none;
   font-size: 13px;
   color: var(--muted);
+  white-space: nowrap;
 }
 .tab.on button {
   color: var(--ink);
   font-weight: 500;
 }
 .tab .action {
-  height: 22px;
-  margin: 0 6px 0 -8px;
-  padding: 0 5px;
-  border-radius: 5px;
+  justify-content: center;
+  width: 30px;
+  margin-left: -8px;
+  padding: 0;
   font-size: 14px;
   font-weight: 400;
   color: var(--muted);
   visibility: hidden;
 }
-.tab:hover .action,
 .tab.on .action,
 .tab.archived .action,
 .action:focus-visible {
   visibility: visible;
 }
-.tab .action:hover {
-  background: var(--line);
-  color: var(--ink);
-}
-@media (hover: none) {
-  .tab .action {
+@media (hover: hover) {
+  .tab:hover .action {
     visibility: visible;
+  }
+  .tab .action:hover {
+    background: var(--line);
+    color: var(--ink);
   }
 }
 .toggle {
@@ -121,6 +142,10 @@ button {
 .version {
   font: 11.5px var(--mono);
   color: var(--muted);
+}
+/* Not in the text, so a screen reader says the version and not a triangle. */
+.version.open::after {
+  content: ' ▾';
 }
 .count {
   min-width: 18px;

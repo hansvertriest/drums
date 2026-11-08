@@ -5,6 +5,7 @@ import { RAIL_WIDTH, useUi } from '../../stores/ui';
 import AgentTabs from '../chat/AgentTabs.vue';
 import Composer from '../chat/Composer.vue';
 import Thread from '../chat/Thread.vue';
+import WorkspaceHeading from './WorkspaceHeading.vue';
 
 const ui = useUi();
 const rail = ref<HTMLElement>();
@@ -14,6 +15,7 @@ const { dragging } = resize;
 
 <template>
   <section ref="rail" class="rail" aria-label="Chat">
+    <WorkspaceHeading />
     <AgentTabs />
     <Thread />
     <Composer />
@@ -44,7 +46,6 @@ const { dragging } = resize;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-right: 1px solid var(--line);
   background: var(--surface);
 }
 .resize {

@@ -13,6 +13,8 @@ import { useUi } from './ui';
 
 /** A busy workspace changes many times a second; the strip needs no more than this. */
 const LIST_REFRESH_MS = 250;
+/** The stream reconnects by itself; only say so if that doesn't work out. */
+const STREAM_DOWN_MS = 8000;
 
 export const useWorkspaces = defineStore('workspaces', () => {
   const workspaces = ref<WorkspaceSummary[]>([]);
@@ -99,11 +101,20 @@ export const useWorkspaces = defineStore('workspaces', () => {
     (handlers[event.type] as (e: DomainEvent) => void)(event);
   }
 
+  let downTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearDownTimer = () => {
+    clearTimeout(downTimer);
+    downTimer = undefined;
+  };
+
   const open = async (id: WorkspaceId) => {
     unsubscribe?.();
+    clearDownTimer();
     currentId.value = id;
     news.update(workspaces.value, id);
     ui.railNews = false;
+    ui.chatNews = false;
+    ui.detailsOpen = false;
     artifacts.reset();
     window.location.hash = `#/w/${id}`;
     unsubscribe = subscribe(id, {
@@ -111,7 +122,17 @@ export const useWorkspaces = defineStore('workspaces', () => {
         for (const missed of inFlight) missed.push(event);
         dispatch(event);
       },
-      onConnect: () => void reload(id).catch(ui.report),
+      onConnect: () => {
+        clearDownTimer();
+        ui.offline = false;
+        void reload(id).catch(ui.report);
+      },
+      onDisconnect: () => {
+        downTimer ??= setTimeout(() => {
+          downTimer = undefined;
+          ui.offline = true;
+        }, STREAM_DOWN_MS);
+      },
       onWorkspacesChanged: scheduleListRefresh,
     });
     await reload(id);
@@ -148,12 +169,23 @@ export const useWorkspaces = defineStore('workspaces', () => {
     await open(state.workspace.id);
   };
 
-  /** On page load: back to the workspace in the URL, or else the newest. */
+  /** On page load and on trying again: back to the workspace in the URL, or else the newest. */
   const boot = async () => {
-    await refreshList();
-    const wanted = /^#\/w\/(.+)$/.exec(window.location.hash)?.[1];
-    const first = workspaces.value.find((workspace) => workspace.id === wanted) ?? workspaces.value.filter((workspace) => !workspace.archived).at(-1);
-    if (first) await open(first.id);
+    ui.booting = !current.value;
+    try {
+      try {
+        await refreshList();
+      } catch {
+        ui.offline = true;
+        return;
+      }
+      ui.offline = false;
+      const wanted = /^#\/w\/(.+)$/.exec(window.location.hash)?.[1];
+      const first = workspaces.value.find((workspace) => workspace.id === wanted) ?? workspaces.value.filter((workspace) => !workspace.archived).at(-1);
+      if (first) await open(first.id);
+    } finally {
+      ui.booting = false;
+    }
   };
 
   return { workspaces, currentId, current, refreshList, open, create, addAgent, closeAgent, setArchived, setArtifactArchived, boot };

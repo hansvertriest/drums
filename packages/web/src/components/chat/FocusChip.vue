@@ -21,9 +21,9 @@ const artifacts = useArtifacts();
   max-width: 100%;
   margin: 0 2px 6px;
   padding: 1px 3px 1px 9px;
-  border: 1px solid var(--stroke);
+  border: 0;
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--surface-2);
   font-size: 12px;
   color: var(--muted);
 }

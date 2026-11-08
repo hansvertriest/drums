@@ -46,11 +46,10 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('App without a workspace', () => {
-  it('shows the header with the logo and a disabled Send', () => {
-    const header = shell().get('header');
-    expect(header.get('[aria-label="drums"]').text()).toBe('d');
-    expect(header.get('button.send').text()).toContain('Send');
-    expect(header.get('button.send').attributes('disabled')).toBeDefined();
+  it('shows the logo, and no Send', () => {
+    const app = shell();
+    expect(app.get('aside [aria-label="drums"]').element.tagName.toLowerCase()).toBe('svg');
+    expect(app.find('button.send').exists()).toBe(false);
   });
 
   it('shows the strip with New workspace, and no role picker in its dialog', async () => {
@@ -62,10 +61,12 @@ describe('App without a workspace', () => {
     expect(dialog.text()).not.toMatch(/role|scoper/i);
   });
 
-  it('shows an empty stage and no chat', () => {
+  it('says so on the stage, offers New workspace, and has no chat', async () => {
     const app = shell();
-    expect(app.get('main').text()).toContain('Nothing here yet');
+    expect(app.get('main').text()).toContain('No workspace yet');
     expect(app.find('section[aria-label="Chat"]').exists()).toBe(false);
+    await app.get('main button').trigger('click');
+    expect(app.find('form[aria-label="New workspace"]').exists()).toBe(true);
   });
 });
 
@@ -174,10 +175,27 @@ describe('the composer', () => {
     const store = withWorkspace();
     useAgents().setStatus('ag', 'running');
     const app = shell(store);
-    expect(app.get('.working').text()).toContain('Stop');
+    expect(app.find('.working').exists()).toBe(true);
+    expect(app.get('.composer .round').attributes('aria-label')).toBe('Stop');
     await app.get('textarea[aria-label="Message"]').setValue('hello');
     await app.get('form.composer').trigger('submit');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('has one round button that sends, and stops the agent while it runs', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 202 }));
+    const store = withWorkspace();
+    const app = shell(store);
+    const round = () => app.get('.composer .round');
+    expect(round().attributes('aria-label')).toBe('Send');
+    expect(round().attributes('type')).toBe('submit');
+    expect(round().attributes('disabled')).toBeDefined();
+    useAgents().setStatus('ag', 'running');
+    await flushPromises();
+    expect(round().attributes('type')).toBe('button');
+    await round().trigger('click');
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/agents/ag/stop', expect.objectContaining({ method: 'POST' }));
   });
 
   it('keeps the text and shows the refusal', async () => {
@@ -236,6 +254,55 @@ describe('the stage and Send', () => {
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/send', expect.objectContaining({ body: '{"overall":"Keep it small"}' }));
     expect(useUi().sendOpen).toBe(false);
+  });
+});
+
+describe('the versions of an artifact', () => {
+  const opened = async () => {
+    const store = withWorkspace();
+    useArtifacts().load([artifact([1, 2]), { ...artifact([1]), id: 'a2', title: 'Design' }]);
+    const app = mount(App, { attachTo: document.body, global: { plugins: [store] } });
+    await flushPromises();
+    await app.get('main [data-version-trigger]').trigger('click');
+    return app;
+  };
+  const list = (app: ReturnType<typeof shell>) => app.find('[role="dialog"][aria-label="Versions"]');
+
+  it('opens from the active tab, newest first with the note, and picks one', async () => {
+    const app = await opened();
+    const rows = list(app).findAll('button');
+    expect(rows.map((row) => row.text())).toEqual([expect.stringContaining('note 2'), expect.stringContaining('note 1')]);
+    await rows[1]!.trigger('click');
+    expect(useArtifacts().viewing).toBe(1);
+    expect(list(app).exists()).toBe(false);
+    expect(app.get('main .old').text()).toContain('Read-only');
+    app.unmount();
+  });
+
+  it('closes on Esc, on a click outside, and on the tab again', async () => {
+    const app = await opened();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await flushPromises();
+    expect(list(app).exists()).toBe(false);
+
+    await app.get('main [data-version-trigger]').trigger('click');
+    expect(list(app).exists()).toBe(true);
+    document.body.click();
+    await flushPromises();
+    expect(list(app).exists()).toBe(false);
+
+    await app.get('main [data-version-trigger]').trigger('click');
+    await app.get('main [data-version-trigger]').trigger('click');
+    expect(list(app).exists()).toBe(false);
+    app.unmount();
+  });
+
+  it('opens another artifact from its tab, without the list', async () => {
+    const app = await opened();
+    await app.findAll('main [role="tab"]')[1]!.trigger('click');
+    expect(useArtifacts().currentId).toBe('a2');
+    expect(list(app).exists()).toBe(false);
+    app.unmount();
   });
 });
 

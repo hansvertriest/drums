@@ -7,6 +7,7 @@ import { useArtifacts } from '../../stores/artifacts';
 import { useMap } from '../../stores/map';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
+import ResponsivePanel from '../shared/ResponsivePanel.vue';
 
 const workspaces = useWorkspaces();
 const artifacts = useArtifacts();
@@ -45,7 +46,8 @@ const send = async () => {
 </script>
 
 <template>
-  <div class="pop" role="dialog" aria-label="Send">
+  <!-- No click-outside on the web: answering in an artifact behind it is the point. -->
+  <ResponsivePanel class="pop" label="Send" :style="{ top: '50px', right: '14px', width: '360px' }" @close="ui.sendOpen = false">
     <h4>Send</h4>
     <template v-for="{ artifact, latest, pending } in groups" :key="artifact.id">
       <h5>{{ artifact.title }} v{{ latest?.version }} → {{ latest && agents.nameOf(latest.by) }}</h5>
@@ -65,24 +67,10 @@ const send = async () => {
       <button type="button" @click="ui.sendOpen = false">Close</button>
       <button class="primary" type="button" :disabled="!canSend" @click="send">Send</button>
     </div>
-  </div>
+  </ResponsivePanel>
 </template>
 
 <style scoped>
-.pop {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 360px;
-  max-height: 70vh;
-  padding: 14px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: 0 10px 32px var(--shadow);
-}
 h4 {
   margin: 0;
   font-size: 14px;
@@ -117,7 +105,7 @@ textarea {
   min-height: 70px;
   margin-top: 12px;
   padding: 6px 8px;
-  border: 1px solid var(--stroke);
+  border: 0;
   border-radius: 8px;
   background: var(--bg);
   color: inherit;
@@ -133,15 +121,14 @@ textarea {
 .acts button {
   height: 32px;
   padding: 0 12px;
-  border: 1px solid var(--stroke);
-  border-radius: 10px;
-  background: var(--surface);
+  border: 0;
+  border-radius: 9px;
+  background: var(--surface-2);
   font-size: 13px;
   font-weight: 500;
 }
 .acts .primary {
   background: var(--accent);
-  border-color: var(--accent);
   color: var(--on-accent);
 }
 .acts .primary:disabled {

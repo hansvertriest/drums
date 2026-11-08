@@ -36,4 +36,5 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 .call{border-radius:12px;padding:14px 16px;background:var(--accent-soft)}
 .chg-on .chg{background:var(--accent-soft);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)}
 .chg-on section.chg,.chg-on .q.chg{border-radius:14px;padding:12px 14px;margin-inline:-14px}
+@media (hover:none) and (pointer:coarse){input,textarea,select{font-size:16px!important}}
 `;

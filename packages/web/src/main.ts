@@ -5,6 +5,7 @@ import App from './App.vue';
 import { useUi } from './stores/ui';
 import { useWorkspaces } from './stores/workspaces';
 import './styles/base.css';
+import './styles/controls.css';
 
 function boot(): void {
   const tokens = document.createElement('style');

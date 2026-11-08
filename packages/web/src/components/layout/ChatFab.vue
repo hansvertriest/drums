@@ -22,7 +22,7 @@ onMounted(() => button.value?.focus({ preventScroll: true }));
 .fab {
   position: absolute;
   z-index: 25;
-  left: 76px;
+  left: 72px;
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   width: 46px;
   height: 46px;

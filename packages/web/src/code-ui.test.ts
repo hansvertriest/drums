@@ -52,7 +52,8 @@ describe('the branch map', () => {
     const frame = wrapper.get('iframe[title^="Branch map"]');
     expect(frame.attributes('sandbox')).toBe('allow-scripts allow-forms');
     expect(frame.attributes('src')).toBe('/map/t/w1/shop/');
-    expect(wrapper.find('select[aria-label="Version"]').exists()).toBe(false);
+    expect(wrapper.find('[data-version-trigger]').exists()).toBe(false);
+    expect(wrapper.find('.switch').exists()).toBe(false);
     expect(wrapper.find('[aria-label="Repos"]').exists()).toBe(false);
   });
 
@@ -73,24 +74,61 @@ describe('the branch map', () => {
   });
 });
 
-describe('the header on code', () => {
-  it('has the branch and repos, Open PR, and counts comments in Send', async () => {
+describe('the bars on code', () => {
+  const details = async (wrapper: ReturnType<typeof app>) => {
+    await wrapper.get('.heading [data-details-trigger]').trigger('click');
+    return wrapper.get('[role="dialog"][aria-label="Workspace details"]');
+  };
+
+  it('has Open PR and the comment count in the bar, the branch and repos in the details', async () => {
     const wrapper = app([repo('shop', { pendingComments: 2 })]);
     await flushPromises();
-    const header = wrapper.get('header.header');
-    expect(header.text()).toContain('drums/paging · shop');
-    expect(header.text()).toContain('Open PR');
-    expect(header.get('.send.primary .count').text()).toBe('2');
+    const bar = wrapper.get('header.stage-bar');
+    expect(bar.text()).toContain('Open PR');
+    expect(bar.get('.send.primary .count').text()).toBe('2');
+    const panel = await details(wrapper);
+    expect(panel.text()).toContain('drums/paging');
+    expect(panel.text()).toContain('shop');
+  });
+
+  it('archives the workspace from the details, after asking', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    const wrapper = app();
+    await flushPromises();
+    const panel = await details(wrapper);
+    await panel.findAll('button').find((b) => b.text() === 'Archive')!.trigger('click');
+    await flushPromises();
+    expect(window.confirm).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/w1/archive', expect.objectContaining({ method: 'POST' }));
+    expect(wrapper.find('[aria-label="Workspace details"]').exists()).toBe(false);
+  });
+
+  it('opens the PR dialog from the details, which is where a phone has it', async () => {
+    const wrapper = app();
+    await flushPromises();
+    const panel = await details(wrapper);
+    await panel.findAll('button').find((b) => b.text() === 'Open PR')!.trigger('click');
+    expect(useUi().openPrsOpen).toBe(true);
+    expect(useUi().detailsOpen).toBe(false);
+  });
+
+  it('moves the name to the stage bar when the chat is folded', async () => {
+    const wrapper = app();
+    await flushPromises();
+    expect(wrapper.find('.stage-bar .crumb').exists()).toBe(false);
+    await wrapper.get('[aria-label="Collapse chat"]').trigger('click');
+    expect(wrapper.get('.stage-bar .crumb').text()).toBe('Add paging');
+    useUi().toggleRail();
   });
 
   it('shows open PRs, and no button once every changed repo has one', async () => {
     const wrapper = app([repo('shop', { pr: { number: 12, url: 'https://x/pull/12' } })]);
     useWorkspaces().workspaces = [{ ...summary, status: 'pr' }];
     await flushPromises();
-    const header = wrapper.get('header.header');
-    expect(header.text()).toContain('PR #12 open');
-    expect(header.get('.prs a').attributes('href')).toBe('https://x/pull/12');
-    expect(header.findAll('button').map((b) => b.text())).not.toContain('Open PR');
+    expect(wrapper.get('.heading').text()).toContain('PR #12 open');
+    const bar = wrapper.get('header.stage-bar');
+    expect(bar.get('.prs a').attributes('href')).toBe('https://x/pull/12');
+    expect(bar.findAll('button').map((b) => b.text())).not.toContain('Open PR');
   });
 
   it('routes comments in the Send panel to whoever the server names', async () => {
@@ -123,7 +161,7 @@ describe('a permission row', () => {
     useThreads().load([], [], [row]);
     await flushPromises();
     expect(wrapper.get('.working').text()).toContain('Waiting for your answer');
-    expect(wrapper.get('.working button').text()).toBe('Stop');
+    expect(wrapper.get('.composer .round').attributes('aria-label')).toBe('Stop');
     expect(wrapper.get('textarea[aria-label=Message]').attributes('placeholder')).toContain('waiting for your answer');
   });
 

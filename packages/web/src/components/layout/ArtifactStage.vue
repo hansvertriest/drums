@@ -7,8 +7,9 @@ import { useArtifacts } from '../../stores/artifacts';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
 import { rendererFor } from '../../renderers';
-import ArtifactTabs from '../artifacts/ArtifactTabs.vue';
 import VersionPicker from '../artifacts/VersionPicker.vue';
+import EmptyState from './EmptyState.vue';
+import StageBar from './StageBar.vue';
 
 const SAVE_DELAY_MS = 300;
 
@@ -63,9 +64,14 @@ const onAnswers = (next: Answer[]) => {
 
 <template>
   <main class="stage">
-    <p v-if="artifacts.artifacts.length === 0" class="empty">Nothing here yet. What the agents make shows up here.</p>
+    <EmptyState v-if="!workspaces.current" logo title="No workspace yet" text="Start one with a goal, and the agents take it from there.">
+      <button type="button" class="action-button primary" @click="ui.newWorkspaceOpen = true">New workspace</button>
+    </EmptyState>
     <template v-else>
-      <ArtifactTabs />
+      <StageBar />
+      <EmptyState v-if="artifacts.artifacts.length === 0" text="Nothing here yet. What the agents make shows up here." />
+    </template>
+    <template v-if="artifacts.artifacts.length > 0">
       <VersionPicker v-if="!renderer?.ownVersions" />
       <div class="doc">
         <component
@@ -95,7 +101,6 @@ const onAnswers = (next: Answer[]) => {
   flex: 1;
   min-height: 0;
   background: var(--bg);
-  border-top: 1px solid var(--line);
 }
 .empty {
   max-width: 880px;

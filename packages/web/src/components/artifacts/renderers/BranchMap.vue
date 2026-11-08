@@ -40,7 +40,6 @@ const map = useMap();
   gap: 4px;
   padding: 6px 12px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
 .repos button {

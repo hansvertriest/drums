@@ -67,8 +67,8 @@ watch(
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px 20px;
+  gap: 16px;
+  padding: 10px 16px 16px;
   overflow: auto;
 }
 .thread > * {

@@ -23,10 +23,17 @@ const note = (seq: number, kind: 'note' | 'message' = 'note'): Post =>
 class FakeEventSource {
   static last: FakeEventSource;
   onmessage?: (message: { data: string }) => void;
+  onerror?: () => void;
+  private listeners = new Map<string, () => void>();
   constructor(readonly url: string) {
     FakeEventSource.last = this;
   }
-  addEventListener() {}
+  addEventListener(type: string, listener: () => void) {
+    this.listeners.set(type, listener);
+  }
+  ready() {
+    this.listeners.get('ready')?.();
+  }
   close() {}
   event(event: DomainEvent) {
     this.onmessage?.({ data: JSON.stringify(event) });
@@ -66,7 +73,7 @@ const withWorkspace = () => {
 const press = (target: EventTarget, init: KeyboardEventInit = {}) => target.dispatchEvent(new KeyboardEvent('keydown', { key: '\\', bubbles: true, ...init }));
 
 describe('collapsing the rail', () => {
-  it('folds with the « button and comes back with the floating one', async () => {
+  it('folds with the icon in the heading and comes back with the floating one', async () => {
     const app = withWorkspace();
     expect(app.find('.fab').exists()).toBe(false);
     await app.get('[aria-label="Collapse chat"]').trigger('click');
@@ -196,6 +203,106 @@ describe('phones', () => {
     await tabs[1]!.trigger('click');
     expect(app.get('.body').attributes('data-tab')).toBe('stage');
     expect(tabs[1]!.attributes('aria-selected')).toBe('true');
+    app.unmount();
+  });
+});
+
+describe('the Chat tab on phones', () => {
+  it('gets a dot when an agent posts while Artifacts is open, and loses it on going back', async () => {
+    const workspaces = useWorkspaces();
+    await workspaces.refreshList();
+    await workspaces.open('w1');
+    const app = shell();
+    await flushPromises();
+    const tabs = () => app.findAll('[aria-label="Chat or artifacts"] button');
+    await tabs()[1]!.trigger('click');
+
+    FakeEventSource.last.event({ type: 'post.created', workspace: 'w1', post: note(1, 'message') });
+    await flushPromises();
+    expect(app.find('[aria-label="Chat or artifacts"] .dot').exists()).toBe(false);
+
+    FakeEventSource.last.event({ type: 'post.created', workspace: 'w1', post: note(2) });
+    await flushPromises();
+    expect(app.find('[aria-label="Chat or artifacts"] .dot').exists()).toBe(true);
+
+    await tabs()[0]!.trigger('click');
+    expect(app.find('[aria-label="Chat or artifacts"] .dot').exists()).toBe(false);
+    app.unmount();
+  });
+
+  it('shows a dot on the logo for news in another workspace', async () => {
+    list = [summary, { id: 'w2', goal: 'Other', status: 'review', lastPost: 3 }];
+    const workspaces = useWorkspaces();
+    await workspaces.refreshList();
+    await workspaces.open('w1');
+    const app = shell();
+    await flushPromises();
+    expect(app.find('.menu .news').exists()).toBe(false);
+    list = [summary, { id: 'w2', goal: 'Other', status: 'review', lastPost: 4 }];
+    await workspaces.refreshList();
+    await flushPromises();
+    expect(app.find('.menu .news').exists()).toBe(true);
+    app.unmount();
+  });
+});
+
+describe('not reaching the server', () => {
+  const lost = (app: ReturnType<typeof shell>) => app.text().includes("Can't reach drums");
+
+  it('says so when the first load fails, and Try again recovers', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const app = shell();
+    await useWorkspaces().boot();
+    await flushPromises();
+    expect(lost(app)).toBe(true);
+    await app.get('.lost button').trigger('click');
+    await flushPromises();
+    expect(lost(app)).toBe(false);
+    expect(useWorkspaces().currentId).toBe('w1');
+    app.unmount();
+  });
+
+  it('shows lines instead of the empty page while loading', async () => {
+    let answer: (response: Response) => void = () => {};
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const app = shell();
+    const booting = useWorkspaces().boot();
+    await flushPromises();
+    expect(app.find('.skeleton').exists()).toBe(true);
+    expect(app.text()).not.toContain('No workspace yet');
+    answer(json([]));
+    await booting;
+    await flushPromises();
+    expect(app.find('.skeleton').exists()).toBe(false);
+    expect(app.text()).toContain('No workspace yet');
+    app.unmount();
+  });
+
+  it('says so only when the stream stays down, and clears when it is back', async () => {
+    const workspaces = useWorkspaces();
+    await workspaces.refreshList();
+    await workspaces.open('w1');
+    const app = shell();
+    await flushPromises();
+    vi.useFakeTimers();
+    try {
+      FakeEventSource.last.onerror?.();
+      await vi.advanceTimersByTimeAsync(7000);
+      expect(lost(app)).toBe(false);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(lost(app)).toBe(true);
+      FakeEventSource.last.ready();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lost(app)).toBe(false);
+
+      FakeEventSource.last.onerror?.();
+      FakeEventSource.last.ready();
+      await vi.advanceTimersByTimeAsync(9000);
+      expect(lost(app)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
     app.unmount();
   });
 });

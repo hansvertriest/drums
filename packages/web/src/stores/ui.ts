@@ -43,6 +43,18 @@ export const useUi = defineStore('ui', () => {
   /** Phones: the workspaces drawer, and which of the two tabs shows. */
   const drawerOpen = ref(false);
   const phoneTab = ref<'chat' | 'stage'>('chat');
+  /** Phones: an agent posted while the artifacts tab was open. */
+  const chatNews = ref(false);
+  /** Phones: the height left above the keyboard, while it is up. */
+  const keyboardHeight = ref<number>();
+  /** The workspace's status, branch, PRs and archive button. */
+  const detailsOpen = ref(false);
+  /** Where the list of versions opens, while it is open. */
+  const versionsAt = ref<{ left: number; top: number }>();
+  /** The first load is on its way. */
+  const booting = ref(false);
+  /** The server doesn't answer: an installed app has no address bar to reload from. */
+  const offline = ref(false);
 
   const report = (cause: unknown) => {
     error.value = cause instanceof Error ? cause.message : String(cause);
@@ -61,7 +73,31 @@ export const useUi = defineStore('ui', () => {
 
   const noteAgentPost = () => {
     if (railCollapsed.value) railNews.value = true;
+    if (phoneTab.value === 'stage') chatNews.value = true;
   };
 
-  return { showSteps, showChanges, newWorkspaceOpen, addAgentOpen, sendOpen, openPrsOpen, error, railCollapsed, railWidth, railNews, drawerOpen, phoneTab, report, toggleRail, setRailWidth, noteAgentPost };
+  return {
+    showSteps,
+    showChanges,
+    newWorkspaceOpen,
+    addAgentOpen,
+    sendOpen,
+    openPrsOpen,
+    error,
+    railCollapsed,
+    railWidth,
+    railNews,
+    drawerOpen,
+    phoneTab,
+    chatNews,
+    keyboardHeight,
+    detailsOpen,
+    versionsAt,
+    booting,
+    offline,
+    report,
+    toggleRail,
+    setRailWidth,
+    noteAgentPost,
+  };
 });

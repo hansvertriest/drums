@@ -19,6 +19,7 @@ beforeAll(async () => {
   mkdirSync(join(webRoot, 'assets'), { recursive: true });
   writeFileSync(join(webRoot, 'index.html'), '<title>drums</title>');
   writeFileSync(join(webRoot, 'assets', 'a.js'), 'export {};');
+  writeFileSync(join(webRoot, 'manifest.webmanifest'), '{}');
   drums = await main({ port: 0, webRoot, home: join(dir, 'home'), workspacesRoot: join(dir, 'ws'), agentBackend: fake.backend, rolePicker: createKeywordRolePicker() });
 });
 
@@ -47,6 +48,12 @@ const answers = [{ name: 'q', label: 'Q', value: 'Stripe' }];
 describe('main', () => {
   it('binds to loopback by default', () => {
     expect(new URL(drums.url).hostname).toBe('127.0.0.1');
+  });
+
+  it('serves the web manifest with its own content type, which Safari may need to install the app', async () => {
+    const response = await get('/manifest.webmanifest');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/manifest+json');
   });
 
   it('serves the health route with the registries wired in', async () => {

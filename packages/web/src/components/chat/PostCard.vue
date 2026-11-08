@@ -24,39 +24,40 @@ const show = (artifact: string, version?: number) => {
 </script>
 
 <template>
-  <div v-if="post.kind === 'message'" class="user">
-    <span class="who">You · {{ shortTime(post.at) }}</span>
-    <button v-if="post.focus" type="button" class="about" @click="show(post.focus.artifact, post.focus.version)">
-      About: {{ artifacts.titleOf(post.focus.artifact) }} · v{{ post.focus.version }}
-    </button>
-    <div v-if="post.text" class="md" v-html="renderMarkdown(post.text)" />
-    <div v-if="post.images?.length" class="images">
-      <a v-for="name in post.images" :key="name" :href="imageUrl(name)" target="_blank" rel="noopener">
-        <img :src="imageUrl(name)" alt="Pasted image" loading="lazy" />
-      </a>
+  <div v-if="post.kind === 'message'" class="mine">
+    <div class="user">
+      <button v-if="post.focus" type="button" class="about" @click="show(post.focus.artifact, post.focus.version)">
+        About: {{ artifacts.titleOf(post.focus.artifact) }} · v{{ post.focus.version }}
+      </button>
+      <div v-if="post.text" class="md" v-html="renderMarkdown(post.text)" />
+      <div v-if="post.images?.length" class="images">
+        <a v-for="name in post.images" :key="name" :href="imageUrl(name)" target="_blank" rel="noopener">
+          <img :src="imageUrl(name)" alt="Pasted image" loading="lazy" />
+        </a>
+      </div>
     </div>
+    <time>{{ shortTime(post.at) }}</time>
   </div>
 
-  <div v-else-if="post.kind === 'feedback'" class="user">
-    <span class="who">You · {{ shortTime(post.at) }}</span>
-    <div v-if="post.overall" class="md" v-html="renderMarkdown(post.overall)" />
-    <p v-for="block in post.code ?? []" :key="block.repo" class="sent-code">
-      {{ block.comments }} comment{{ block.comments === 1 ? '' : 's' }} on {{ block.repo }}
-    </p>
-    <ul>
-      <template v-for="item in post.items" :key="item.artifact">
-        <li v-for="answer in item.answers" :key="answer.name">
-          {{ answer.label }}: <b>{{ answer.value }}</b>
-        </li>
-      </template>
-    </ul>
+  <div v-else-if="post.kind === 'feedback'" class="mine">
+    <div class="user">
+      <div v-if="post.overall" class="md" v-html="renderMarkdown(post.overall)" />
+      <p v-for="block in post.code ?? []" :key="block.repo" class="sent-code">
+        {{ block.comments }} comment{{ block.comments === 1 ? '' : 's' }} on {{ block.repo }}
+      </p>
+      <ul>
+        <template v-for="item in post.items" :key="item.artifact">
+          <li v-for="answer in item.answers" :key="answer.name">
+            {{ answer.label }}: <b>{{ answer.value }}</b>
+          </li>
+        </template>
+      </ul>
+    </div>
+    <time>{{ shortTime(post.at) }}</time>
   </div>
 
   <article v-else class="post">
-    <header>
-      <span class="by">{{ agents.nameOf(post.agent) }}</span>
-      <time>{{ shortTime(post.at) }}</time>
-    </header>
+    <p class="by">{{ agents.nameOf(post.agent) }} · {{ shortTime(post.at) }}</p>
     <h3>{{ post.title }}</h3>
     <div class="md" v-html="renderMarkdown(post.message)" />
     <button
@@ -87,11 +88,21 @@ const show = (artifact: string, version?: number) => {
 </template>
 
 <style scoped>
-.user {
+.mine {
   align-self: flex-end;
-  max-width: 92%;
-  padding: 9px 12px;
-  border-radius: 12px 12px 4px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  max-width: 88%;
+}
+.mine time {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.user {
+  padding: 8px 12px;
+  border-radius: 14px 14px 4px 14px;
   background: var(--accent-soft);
   overflow-wrap: anywhere;
 }
@@ -114,15 +125,6 @@ const show = (artifact: string, version?: number) => {
   padding-left: 16px;
   font-size: 13px;
 }
-.who {
-  display: block;
-  margin-bottom: 2px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 .about {
   display: block;
   margin-bottom: 4px;
@@ -134,36 +136,21 @@ const show = (artifact: string, version?: number) => {
   text-align: left;
 }
 .post {
-  padding: 11px 13px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--bg);
   overflow-wrap: anywhere;
 }
-.post header {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
 .by {
-  flex: 1;
-  font: 600 11px var(--sans);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-time {
+  margin: 0;
   font-size: 12px;
   color: var(--muted);
 }
 h3 {
-  margin: 2px 0 0;
+  margin: 1px 0 0;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
 }
 .post .md {
-  margin-top: 6px;
+  margin-top: 3px;
 }
 .sent-code {
   margin: 4px 0 0;
@@ -181,16 +168,16 @@ h3 {
   align-items: center;
   gap: 4px 10px;
   width: 100%;
-  margin-top: 10px;
-  padding: 7px 10px;
-  border: 1px solid var(--stroke);
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 0;
   border-radius: 9px;
-  background: var(--surface);
+  background: var(--surface-2);
   font-size: 12.5px;
   text-align: left;
 }
 .open:hover {
-  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .open code {
   font-family: var(--mono);

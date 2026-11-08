@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { api } from '../../api/client';
 import { usePastedImages } from '../../composables/usePastedImages';
 import { useAgents } from '../../stores/agents';
@@ -15,6 +15,7 @@ const threads = useThreads();
 const focus = useFocus();
 const ui = useUi();
 const text = ref('');
+const field = ref<HTMLTextAreaElement>();
 const { images, paste, remove, take } = usePastedImages((message) => ui.report(message));
 
 const agent = computed(() => agents.current);
@@ -33,6 +34,15 @@ const working = computed(() => {
 });
 
 const canSend = computed(() => (text.value.trim() !== '' || images.value.length > 0) && !busy.value && !!agent.value);
+
+/** One line, growing with what is typed up to the CSS limit. */
+watch(text, async () => {
+  await nextTick();
+  const el = field.value;
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+});
 
 const send = async () => {
   const message = text.value.trim();
@@ -57,7 +67,6 @@ const stop = () => {
   <form class="composer" @submit.prevent="send">
     <div v-if="busy" class="working">
       <span>● {{ asking ? 'Waiting for your answer' : working }}</span>
-      <button type="button" @click="stop">Stop</button>
     </div>
     <FocusChip />
     <div v-if="images.length > 0" class="images">
@@ -68,15 +77,21 @@ const stop = () => {
     </div>
     <div class="box">
       <textarea
+        ref="field"
         v-model="text"
-        rows="2"
+        rows="1"
         aria-label="Message"
         :placeholder="placeholder"
         :disabled="!agent"
         @keydown.enter.exact.prevent="send"
         @paste="paste"
       />
-      <button class="primary" type="submit" :disabled="!canSend">Send</button>
+      <button v-if="busy" key="stop" class="round" type="button" aria-label="Stop" title="Stop" @click="stop">
+        <svg width="11" height="11" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="currentColor" /></svg>
+      </button>
+      <button v-else key="send" class="round" type="submit" aria-label="Send" title="Send" :disabled="!canSend">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" /></svg>
+      </button>
     </div>
   </form>
 </template>
@@ -84,16 +99,13 @@ const stop = () => {
 <style scoped>
 .composer {
   flex: none;
-  padding: 10px 12px 12px;
-  border-top: 1px solid var(--line);
+  padding: 6px 12px 12px;
   background: var(--surface);
 }
 .working {
   display: flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  margin: 0 2px 8px;
+  margin: 0 4px 6px;
   font: 12px var(--mono);
   color: var(--accent);
 }
@@ -102,15 +114,6 @@ const stop = () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.working button {
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--stroke);
-  border-radius: 7px;
-  background: var(--surface);
-  font: 500 12px var(--sans);
-  color: var(--ink);
 }
 .images {
   display: flex;
@@ -147,19 +150,18 @@ const stop = () => {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 6px 6px 6px 12px;
-  border: 1px solid var(--stroke);
-  border-radius: 12px;
+  padding: 5px 5px 5px 13px;
+  border-radius: 20px;
   background: var(--bg);
 }
 .box:focus-within {
-  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 textarea {
   flex: 1;
-  min-height: 40px;
+  min-width: 0;
   max-height: 160px;
-  padding: 4px 0;
+  padding: 5px 0;
   border: 0;
   outline: none;
   background: none;
@@ -168,17 +170,20 @@ textarea {
   line-height: 1.45;
   resize: none;
 }
-.primary {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--accent);
-  border-radius: 10px;
+.round {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 13.5px;
-  font-weight: 500;
 }
-.primary:disabled {
+.round:disabled {
   opacity: 0.45;
 }
 </style>

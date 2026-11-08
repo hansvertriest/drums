@@ -4,6 +4,12 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(-
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* iPhone zooms the page on focus when a field's text is under 16px. Component styles win on specificity, hence !important. */
+@media (hover: none) and (pointer: coarse) {
+  input, textarea, select { font-size: 16px !important; }
+}
+
 .md { font-size: 13.5px; line-height: 1.55; }
 .md > :first-child { margin-top: 0; }
 .md p, .md blockquote { margin: 6px 0 0; }
