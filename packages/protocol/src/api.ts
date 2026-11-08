@@ -30,6 +30,10 @@ export const CreateWorkspaceRequest = z.object({
   goal: z.string().trim().min(1).max(20_000),
   repos: z.array(z.object({ name: RepoName, base: BranchName })).max(20).default([]),
   branch: BranchName.optional(),
+  /** Replaces the picker's title. */
+  title: z.string().trim().min(1).max(300).optional(),
+  /** Skips the role picker: exactly these agents start, with exactly this text. */
+  agents: z.array(z.object({ role: RoleId, instruction: z.string().trim().min(1).max(20_000) })).min(1).max(20).optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequest>;
 

@@ -186,6 +186,9 @@ describe('the API refuses', () => {
     expect((await send('POST', '/api/workspaces', { goal: '  ' })).status).toBe(400);
     expect((await send('POST', '/api/workspaces', {})).status).toBe(400);
     expect((await get('/api/workspaces', { method: 'POST', body: 'not json' })).status).toBe(400);
+    expect((await send('POST', '/api/workspaces', { goal: 'x', agents: [] })).status).toBe(400);
+    expect((await send('POST', '/api/workspaces', { goal: 'x', agents: [{ role: 'wizard', instruction: 'x' }] })).status).toBe(400);
+    expect((await send('POST', '/api/workspaces', { goal: 'x', agents: [{ role: 'coder', instruction: 'x' }] })).status).toBe(400);
   });
 
   it('bad ids and unknown things', async () => {

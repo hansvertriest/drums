@@ -244,6 +244,7 @@ drums never asks which agents to start.
 
 - **New workspace:** one model call with structured output reads the goal and returns `[{ role, instruction }]`, choosing from the role registry's `summary` fields, so new roles are picked up automatically. A Coder is only chosen when repos are attached. If the call returns nothing usable, start a Scoper.
 - **Add agent:** the same call with "pick exactly one", given the instruction and the workspace overview.
+- **Through the API:** `POST /api/workspaces` may name `agents` itself, for callers that run a fixed workflow. Then there is no model call: exactly those agents start with exactly that text, and the request's `title`, if any, is the title. An unknown role, or one that needs a repo when none is attached, refuses the request before anything is created.
 
 Use the current default Claude model (`claude-opus-5-5`) unless configured otherwise, and keep the model id in config, not in code.
 
@@ -357,7 +358,7 @@ REST for actions, one Server-Sent Events stream per open workspace for everythin
 
 ```
 GET    /api/workspaces                      list (for the strip)
-POST   /api/workspaces                      { goal, repos: [{ name, base }], branch? }
+POST   /api/workspaces                      { goal, repos: [{ name, base }], branch?, title?, agents?: [{ role, instruction }] }
 GET    /api/workspaces/:ws                  full state for one workspace
 GET    /api/workspaces/:ws/stream           SSE: DomainEvent
 POST   /api/workspaces/:ws/agents           { instruction }  → role picked by drums

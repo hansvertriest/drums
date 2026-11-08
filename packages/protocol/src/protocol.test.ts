@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DomainEvent, HealthResponse, ImageName, ImageType, MAX_IMAGE_BYTES, MAX_IMAGES, MAX_MESSAGE_BODY_BYTES, Post, WorkspaceId, imageExtension, imageTypeOf, parseFrameMessage } from './index.js';
+import { CreateWorkspaceRequest, DomainEvent, HealthResponse, ImageName, ImageType, MAX_IMAGE_BYTES, MAX_IMAGES, MAX_MESSAGE_BODY_BYTES, Post, WorkspaceId, imageExtension, imageTypeOf, parseFrameMessage } from './index.js';
 
 describe('protocol schemas', () => {
   it('accepts a known domain event and rejects an unknown type', () => {
@@ -23,6 +23,24 @@ describe('protocol schemas', () => {
     const note = { kind: 'note', seq: 1, agent: 'a1', at, title: 't', message: 'm' };
     expect(Post.parse(note)).toEqual(note);
     expect(Post.safeParse({ ...note, kind: 'version' }).success).toBe(false);
+  });
+});
+
+describe('CreateWorkspaceRequest', () => {
+  const agents = [{ role: 'coder', instruction: 'Fix it' }];
+
+  it('takes agents and a title, and needs neither', () => {
+    expect(CreateWorkspaceRequest.parse({ goal: 'g', title: ' T ', agents })).toEqual({ goal: 'g', repos: [], title: 'T', agents });
+    expect(CreateWorkspaceRequest.parse({ goal: 'g' })).toEqual({ goal: 'g', repos: [] });
+  });
+
+  it.each([
+    ['no agents', { agents: [] }],
+    ['an empty instruction', { agents: [{ role: 'coder', instruction: '  ' }] }],
+    ['no role', { agents: [{ instruction: 'x' }] }],
+    ['an empty title', { title: '  ' }],
+  ])('refuses %s', (_name, fields) => {
+    expect(CreateWorkspaceRequest.safeParse({ goal: 'g', ...fields }).success).toBe(false);
   });
 });
 

@@ -3,7 +3,7 @@ import type { AgentService } from '../agents/agent-service.js';
 import type { ArtifactService } from '../artifacts/artifact-service.js';
 import { branchMapArtifactKind } from '../artifacts/branch-map.js';
 import type { CodeService } from '../code/code-service.js';
-import { NotFoundError } from '../errors.js';
+import { InvalidError, NotFoundError } from '../errors.js';
 import type { FeedbackService } from '../feedback/feedback-service.js';
 import type { Clock } from '../ports/clock.js';
 import type { Ids } from '../ports/ids.js';
@@ -17,7 +17,7 @@ import { workspaceSlug } from './slug.js';
 import { workspaceStatus } from './status.js';
 
 export interface WorkspaceService {
-  /** Creates the workspace, with its worktrees if repos are attached, and starts the agents drums picks for the goal. */
+  /** Creates the workspace, with its worktrees if repos are attached, and starts the agents the request names, or else those drums picks for the goal. */
   create(request: Pick<CreateWorkspaceRequest, 'goal'> & Partial<CreateWorkspaceRequest>): Promise<WorkspaceState>;
   list(): Promise<WorkspaceSummary[]>;
   state(id: WorkspaceId): Promise<WorkspaceState>;
@@ -39,6 +39,14 @@ export interface WorkspaceServiceDeps {
   rolePicker: RolePicker;
   /** What a workspace starts with when the picker returns nothing usable (spec §4.4). */
   firstRole: RoleId;
+}
+
+/** Roles named by the caller rather than the picker: refused outright, because there is no model answer to fall back from. */
+function refuseUnstartable(roles: RoleRegistry, picks: readonly RolePick[], hasRepos: boolean): void {
+  for (const { role } of picks) {
+    if (!roles.has(role)) throw new InvalidError(`Unknown role: ${role}.`);
+    if (roles.get(role).needsRepo && !hasRepos) throw new InvalidError(`The role ${role} needs a repo, and none is attached.`);
+  }
 }
 
 export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceService {
@@ -65,19 +73,26 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
   };
 
   return {
-    async create({ goal, repos: requested = [], branch }) {
+    async create({ goal, repos: requested = [], branch, title: requestedTitle, agents: requestedAgents }) {
+      const hasRepos = requested.length > 0;
+      if (requestedAgents) refuseUnstartable(roles, requestedAgents, hasRepos);
       const id = workspaceSlug(goal, ids.next());
       const createdAt = clock.now().toISOString();
-      if (requested.length === 0) {
-        const { picks, title } = await pick(goal, false);
-        await store.createWorkspace({ id, goal, ...(title ? { title } : {}), createdAt, agents: [], repos: [], permissions: [], nudges: {} });
+      const decide = async () => {
+        const { picks, title: pickedTitle } = requestedAgents ? { picks: requestedAgents, title: undefined } : await pick(goal, hasRepos);
+        const title = requestedTitle ?? pickedTitle;
+        return { picks, titled: title ? { title } : {} };
+      };
+      if (!hasRepos) {
+        const { picks, titled } = await decide();
+        await store.createWorkspace({ id, goal, ...titled, createdAt, agents: [], repos: [], permissions: [], nudges: {} });
         await startAll(id, picks);
         return state(id);
       }
       const name = branch ?? `drums/${id}`;
       const { repos, failedInstalls } = await code.attach(id, requested, name);
-      const { picks, title } = await pick(goal, true);
-      await store.createWorkspace({ id, goal, ...(title ? { title } : {}), createdAt, agents: [], repos, branch: name, permissions: [], nudges: {} });
+      const { picks, titled } = await decide();
+      await store.createWorkspace({ id, goal, ...titled, createdAt, agents: [], repos, branch: name, permissions: [], nudges: {} });
       await artifacts.createEmpty(id, { title: branchMapArtifactKind.name, kind: branchMapArtifactKind.id });
       await code.openAll(id);
       const [first] = await startAll(id, picks);
