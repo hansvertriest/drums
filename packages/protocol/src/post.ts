@@ -62,8 +62,18 @@ export const FeedbackPost = Base.extend({
   code: z.array(z.object({ repo: RepoName, comments: z.number().int().nonnegative(), markdown: z.string() })).optional(),
 });
 
+/** One agent passing work to another. Written twice, since a post is in one thread: `sent` for the sender, `received` for the target. */
+export const HandoverPost = Base.extend({
+  kind: z.literal('handover'),
+  direction: z.enum(['sent', 'received']),
+  /** The agent on the other side. */
+  peer: AgentId,
+  instruction: z.string(),
+});
+export type HandoverPost = z.infer<typeof HandoverPost>;
+
 /** A thread entry. */
-export const Post = z.discriminatedUnion('kind', [NotePost, VersionPost, CheckpointPost, MessagePost, FeedbackPost]);
+export const Post = z.discriminatedUnion('kind', [NotePost, VersionPost, CheckpointPost, MessagePost, FeedbackPost, HandoverPost]);
 export type Post = z.infer<typeof Post>;
 
 /** A post before the store gives it its place in the feed. */

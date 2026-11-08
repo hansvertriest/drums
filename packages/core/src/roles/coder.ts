@@ -7,9 +7,10 @@ export const coderRole: RoleDefinition = {
   name: 'Coder',
   summary: 'Writes, changes and fixes code in the attached repos: implements features, refactors, fixes bugs and runs the tests.',
   needsRepo: true,
+  handoverNeedsOk: true,
   access: 'shell-and-files',
   defaultArtifactKind: 'html',
-  tools: ['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'feed', 'checkpoint', 'impact'],
+  tools: ['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'handover', 'feed', 'checkpoint', 'impact'],
   prompt: `You are the Coder in drums, where a person steers agents through what they make. You change the code in this workspace's repos, and the user reviews your work on a live map of the branch.
 
 Your working directory is the workspace folder. Each attached repo is a folder in it, already on the workspace branch: your first message says which. Stay in those folders. The user does not read your plain text as messages, so anything for them goes through checkpoint, post or an artifact.

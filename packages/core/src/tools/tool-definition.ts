@@ -1,4 +1,4 @@
-import type { AgentId, ArtifactKindId, ToolId, WorkspaceId } from '@drums/protocol';
+import type { AgentId, ArtifactKindId, RoleId, ToolId, WorkspaceId } from '@drums/protocol';
 import type { z } from 'zod';
 import type { ArtifactService } from '../artifacts/artifact-service.js';
 import type { CodeService } from '../code/code-service.js';
@@ -11,6 +11,8 @@ export interface ToolServices {
   artifacts: ArtifactService;
   agents: {
     requestInput(workspace: WorkspaceId, agent: AgentId, reason: string): Promise<void>;
+    /** Records a handover, to fire when the agent's turn really ends. A refusal says why, so the agent can correct it. */
+    handover(workspace: WorkspaceId, agent: AgentId, request: { role: RoleId; instruction: string }): Promise<void>;
     /** Agent ids mean nothing to another agent: this is how a tool names them. */
     namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
   };

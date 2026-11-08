@@ -12,6 +12,8 @@ export interface RoleDefinition {
   /** Which registered tools it gets. */
   tools: ToolId[];
   needsRepo?: boolean;
+  /** A handover to this role waits for the user's OK. */
+  handoverNeedsOk?: boolean;
   /** What it can touch besides `tools`. Without this, nothing. */
   access?: SystemAccess;
   defaultArtifactKind?: ArtifactKindId;

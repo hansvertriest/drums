@@ -1,4 +1,4 @@
-import type { AgentId, ArtifactId, CreateWorkspaceRequest, DomainEvent, WorkspaceId, WorkspaceState, WorkspaceSummary } from '@drums/protocol';
+import type { AgentId, ArtifactId, CreateWorkspaceRequest, DomainEvent, Post, WorkspaceId, WorkspaceState, WorkspaceSummary } from '@drums/protocol';
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api/client';
@@ -16,6 +16,9 @@ import { useUi } from './ui';
 const LIST_REFRESH_MS = 250;
 /** The stream reconnects by itself; only say so if that doesn't work out. */
 const STREAM_DOWN_MS = 8000;
+
+/** What an agent wrote, as opposed to what the user sent it or another agent handed it. */
+const isAgentPost = (post: Post) => post.kind !== 'message' && post.kind !== 'feedback' && !(post.kind === 'handover' && post.direction === 'received');
 
 export const useWorkspaces = defineStore('workspaces', () => {
   const workspaces = ref<WorkspaceSummary[]>([]);
@@ -102,7 +105,7 @@ export const useWorkspaces = defineStore('workspaces', () => {
     'agent.closed': (event) => agents.close(event.agent),
     'agent.step': (event) => threads.addStep(event.step),
     'post.created': (event) => {
-      if (threads.addPost(event.post) && event.post.kind !== 'message' && event.post.kind !== 'feedback') ui.noteAgentPost();
+      if (threads.addPost(event.post) && isAgentPost(event.post)) ui.noteAgentPost();
     },
     'artifact.version': (event) => artifacts.addVersion(event.artifact, event.artifact.versions.at(-1)?.by === agents.current?.id),
     'artifact.archived': (event) => artifacts.replace(event.artifact),

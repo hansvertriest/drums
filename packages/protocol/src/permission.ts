@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AgentId } from './ids.js';
+import { AgentId, RoleId } from './ids.js';
 
 export const PermissionDecision = z.enum(['allow', 'deny']);
 export type PermissionDecision = z.infer<typeof PermissionDecision>;
@@ -19,5 +19,7 @@ export const PermissionRequest = z.object({
   detail: z.string(),
   at: z.iso.datetime(),
   status: PermissionStatus,
+  /** Set when this asks to hand over to a role. No session waits on such a row: drums itself acts on the answer. */
+  handover: z.object({ role: RoleId }).optional(),
 });
 export type PermissionRequest = z.infer<typeof PermissionRequest>;

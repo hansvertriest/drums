@@ -3,6 +3,7 @@ import { ConflictError, NotFoundError } from '../errors.js';
 import type { AgentBackend, AgentEvent, AgentSession, AgentSessionOptions } from '../ports/agent-backend.js';
 import type { Clock } from '../ports/clock.js';
 import type { AgentClaims } from './agent-claims.js';
+import type { HandoverRequest } from './agent-handover.js';
 import type { AgentPermissions } from './agent-permissions.js';
 import type { AgentRecords } from './agent-records.js';
 import type { EndOfTurn, TurnRecord } from './turn-checks/end-of-turn.js';
@@ -13,8 +14,10 @@ interface Live {
   stopping: boolean;
   /** `request_input` was called this turn, so ending it means Needs input, not review. */
   wantsInput: boolean;
-  /** The end-of-turn checks are running: no turn is in progress to interrupt. */
-  checking: boolean;
+  /** Asked for this turn, and acted on only when the turn really ends. Here and not on `turn`, because a nudge replaces that. */
+  handover?: HandoverRequest | undefined;
+  /** The end-of-turn checks or a handover are running: no turn is in progress to interrupt. */
+  settling: boolean;
   /** A stored session that hasn't yet shown it could resume. */
   unproven: boolean;
   /** Given up on, or shutting down: whatever it still reports means nothing. */
@@ -34,12 +37,14 @@ export interface AgentSessionsDeps {
   options(workspace: WorkspaceId, agent: Agent): AgentSessionOptions;
   /** What a session that starts over needs up front, having lost its conversation. */
   overview(workspace: WorkspaceId, agent: AgentId): Promise<string>;
+  /** The turn ended cleanly with a handover recorded. Never rejects. */
+  handOver(workspace: WorkspaceId, sender: AgentId, request: HandoverRequest): Promise<void>;
 }
 
 export type AgentSessions = ReturnType<typeof createAgentSessions>;
 
 /** Running sessions: opening them, following their events, and what those do to the agent's status. */
-export function createAgentSessions({ backend, clock, records, claims, permissions, endOfTurn, options, overview }: AgentSessionsDeps) {
+export function createAgentSessions({ backend, clock, records, claims, permissions, endOfTurn, options, overview, handOver }: AgentSessionsDeps) {
   const live = new Map<AgentId, Live>();
 
   const newTurn = (answering: string[] = []): TurnRecord => ({ startedAt: clock.now().toISOString(), writes: [], answering });
@@ -59,7 +64,7 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
 
   /** Sends a nudge if the checks find one, keeping the agent claimed and running. False if the turn is really over. */
   const nudged = async (workspace: WorkspaceId, agent: AgentId, state: Live) => {
-    state.checking = true;
+    state.settling = true;
     try {
       const nudge = await endOfTurn.review(workspace, agent, state.turn);
       // Stop was pressed while the checks ran.
@@ -71,7 +76,20 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
       await records.addError(workspace, agent, error instanceof Error ? error.message : String(error));
       return false;
     } finally {
-      state.checking = false;
+      state.settling = false;
+    }
+  };
+
+  /** Holds the sender throughout, so a message can't start a turn that the handover then marks as idle. */
+  const firing = async (workspace: WorkspaceId, agent: AgentId, state: Live, request: HandoverRequest) => {
+    state.settling = true;
+    try {
+      await handOver(workspace, agent, request);
+    } finally {
+      state.settling = false;
+      // Stop pressed during it has nothing to stop, and must not count against the next turn.
+      state.stopping = false;
+      claims.release(agent);
     }
   };
 
@@ -81,10 +99,13 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
     await permissions.expireAll(workspace, agent);
     // Stop, a failed turn and a turn that ends by asking the user all run no checks.
     if (event.outcome === 'success' && !state.stopping && !state.wantsInput && (await nudged(workspace, agent, state))) return undefined;
-    claims.release(agent);
-    const { stopping, wantsInput } = state;
+    const { stopping, wantsInput, handover } = state;
     state.stopping = false;
     state.wantsInput = false;
+    state.handover = undefined;
+    // Any other ending drops the handover. Only down here: the row it may add must outlive `expireAll` above.
+    if (handover && event.outcome === 'success' && !stopping && !wantsInput) return firing(workspace, agent, state, handover);
+    claims.release(agent);
     if (stopping) return records.setStatus(workspace, agent, 'idle');
     if (event.outcome === 'error') {
       await records.addError(workspace, agent, event.error ?? 'The turn failed.');
@@ -126,8 +147,9 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
     if (state.abandoned) return;
     if (state.unproven && claims.has(agent)) return void (await startOver(workspace, agent, state));
     if (live.get(agent) === state) live.delete(agent);
-    await permissions.expireAll(workspace, agent);
-    if (!claims.release(agent) && !failure) return;
+    // A handover row outlives its turn, so an agent that holds no claim can still be waiting on one.
+    const expired = await permissions.expireAll(workspace, agent);
+    if (!claims.release(agent) && !failure && expired === 0) return;
     await records.addError(workspace, agent, failure ?? 'The session ended unexpectedly.');
     await records.setStatus(workspace, agent, 'idle');
   };
@@ -137,7 +159,7 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
     if (existing) return existing;
     const sessionOptions = options(workspace, agent);
     const session = agent.sessionId ? await backend.resume(agent.sessionId, sessionOptions) : await backend.start(sessionOptions);
-    const state: Live = { session, stopping: false, wantsInput: false, checking: false, unproven: !!agent.sessionId, abandoned: false, turn: newTurn() };
+    const state: Live = { session, stopping: false, wantsInput: false, settling: false, unproven: !!agent.sessionId, abandoned: false, turn: newTurn() };
     live.set(agent.id, state);
     void consume(workspace, agent.id, state);
     return state;
@@ -171,6 +193,8 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
   /** False if the session could not take it; the failure is then in the thread as an error step. */
   async function deliver(workspace: WorkspaceId, id: AgentId, text: string): Promise<boolean> {
     try {
+      // Only a handover row can still be pending here, and a message or Send to its agent overtakes it.
+      await permissions.expireAll(workspace, id);
       await records.setStatus(workspace, id, 'running');
       const agent = await records.find(workspace, id);
       try {
@@ -196,11 +220,18 @@ export function createAgentSessions({ backend, clock, records, claims, permissio
       const state = live.get(id);
       if (!state || !claims.has(id)) return;
       state.stopping = true;
-      if (!state.checking) await state.session.interrupt();
+      if (!state.settling) await state.session.interrupt();
     },
     wantsInput(id: AgentId) {
       const state = live.get(id);
       if (state) state.wantsInput = true;
+    },
+    /** One per turn. Fires when the turn really ends; see `whenEnded`. */
+    requestHandover(id: AgentId, request: HandoverRequest) {
+      const state = live.get(id);
+      if (!state) throw new ConflictError('This agent has no session to hand over from.');
+      if (state.handover) throw new ConflictError(`You already asked to hand over to ${state.handover.role} this turn.`);
+      state.handover = request;
     },
     async answer(workspace: WorkspaceId, agent: AgentId, id: string, decision: PermissionDecision) {
       const request = (await permissions.pendingOf(workspace, agent)).find((pending) => pending.id === id);

@@ -85,14 +85,14 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
       };
       if (!hasRepos) {
         const { picks, titled } = await decide();
-        await store.createWorkspace({ id, goal, ...titled, createdAt, agents: [], repos: [], permissions: [], nudges: {} });
+        await store.createWorkspace({ id, goal, ...titled, createdAt, agents: [], repos: [], permissions: [], nudges: {}, handoversInARow: 0 });
         await startAll(id, picks);
         return state(id);
       }
       const name = branch ?? `drums/${id}`;
       const { repos, failedInstalls } = await code.attach(id, requested, name);
       const { picks, titled } = await decide();
-      await store.createWorkspace({ id, goal, ...titled, createdAt, agents: [], repos, branch: name, permissions: [], nudges: {} });
+      await store.createWorkspace({ id, goal, ...titled, createdAt, agents: [], repos, branch: name, permissions: [], nudges: {}, handoversInARow: 0 });
       await artifacts.createEmpty(id, { title: branchMapArtifactKind.name, kind: branchMapArtifactKind.id });
       await code.openAll(id);
       const [first] = await startAll(id, picks);

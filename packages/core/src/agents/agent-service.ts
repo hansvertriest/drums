@@ -17,6 +17,7 @@ import { bindTool } from '../tools/bind.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolServices } from '../tools/tool-definition.js';
 import { createAgentClaims } from './agent-claims.js';
+import { createAgentHandover, isHandoverRow, type AgentOpening, type HandoverRequest } from './agent-handover.js';
 import { uniqueAgentName } from './agent-name.js';
 import { createAgentPermissions } from './agent-permissions.js';
 import { createAgentRecords, refuseIfArchived } from './agent-records.js';
@@ -47,7 +48,11 @@ export interface AgentService {
   /** Ends every session in the workspace, as for archiving. The agents resume with their next message. */
   pause(workspace: WorkspaceId): Promise<void>;
   requestInput(workspace: WorkspaceId, agent: AgentId, reason: string): Promise<void>;
-  /** Allow or deny a call the agent's turn is waiting on. The turn goes on either way. */
+  /** Records a handover, to fire when the agent's turn really ends. A refusal says why, so the agent can correct it. */
+  handover(workspace: WorkspaceId, agent: AgentId, request: HandoverRequest): Promise<void>;
+  /** The user sent something, so agents get a fresh run of handovers. */
+  resetHandovers(workspace: WorkspaceId): Promise<void>;
+  /** Allow or deny a call the agent's turn is waiting on, or a handover waiting for the user's OK. */
   answerPermission(workspace: WorkspaceId, agent: AgentId, id: string, decision: PermissionDecision): Promise<void>;
   /** The PRs are open: whoever was ready for review has nothing more to wait for. */
   settleReviews(workspace: WorkspaceId): Promise<void>;
@@ -95,6 +100,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     permissions,
     endOfTurn,
     overview: (workspace, agent) => overview(workspace, agent),
+    handOver: (workspace, sender, request) => handover.whenTurnEnded(workspace, sender, request),
     options(workspace, agent) {
       const role = roles.get(agent.role);
       const ctx = {
@@ -116,24 +122,31 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     impact: (...args) => deps.code().impact(...args),
   };
   const overview = (workspace: WorkspaceId, reader?: AgentId) =>
-    workspaceOverview({ store, artifacts, posts, code: deps.code }, workspace, reader);
+    workspaceOverview({ store, artifacts, posts, roles, code: deps.code }, workspace, reader);
+
+  /** The agent is new, so the overview goes in front of what it is told. */
+  const startAgent = async (workspace: WorkspaceId, roleId: RoleId, { post, text }: AgentOpening) => {
+    const role = roles.get(roleId);
+    const id = ids.next();
+    const added = await store.updateWorkspace(workspace, (w) => ({
+      ...w,
+      agents: [...w.agents, { id, role: role.id, name: uniqueAgentName(role.name, w.agents), status: 'idle' }],
+    }));
+    const agent = added.agents.find((a) => a.id === id) as Agent;
+    claims.add(id);
+    const message = await claims.whilePreparing(id, async () => {
+      events.emit({ type: 'agent.added', workspace, agent });
+      await posts.add(workspace, id, post);
+      return `${await overview(workspace, id)}\n\n${text}`;
+    });
+    return { agent, delivered: await sessions.deliver(workspace, id, message) };
+  };
+
+  const handover = createAgentHandover({ store, ids, roles, posts, records, claims, permissions, startAgent, deliver: sessions.deliver });
 
   const service: AgentService = {
     async start(workspace, roleId, instruction) {
-      const role = roles.get(roleId);
-      const id = ids.next();
-      const added = await store.updateWorkspace(workspace, (w) => ({
-        ...w,
-        agents: [...w.agents, { id, role: role.id, name: uniqueAgentName(role.name, w.agents), status: 'idle' }],
-      }));
-      const agent = added.agents.find((a) => a.id === id) as Agent;
-      claims.add(id);
-      const message = await claims.whilePreparing(id, async () => {
-        events.emit({ type: 'agent.added', workspace, agent });
-        await posts.add(workspace, id, { kind: 'message', text: instruction });
-        return `${await overview(workspace, id)}\n\n${instruction}`;
-      });
-      await sessions.deliver(workspace, id, message);
+      const { agent } = await startAgent(workspace, roleId, { post: { kind: 'message', text: instruction }, text: instruction });
       return agent;
     },
     reportError: (workspace, agent, text) => records.addError(workspace, agent, text),
@@ -148,6 +161,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
       const agent = await records.findOpen(workspace, id);
       claims.claim(agent);
       const message = await claims.whilePreparing(id, async () => {
+        await handover.reset(workspace);
         const block = focus && focusBlock(focus, await artifacts.get(workspace, focus.artifact), await service.namer(workspace));
         const saved = await savePastedImages(store, ids, workspace, images);
         await posts.add(workspace, id, { kind: 'message', text, ...(focus ? { focus } : {}), ...(saved.length > 0 ? { images: saved.map(({ name }) => name) } : {}) });
@@ -182,7 +196,16 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
       await posts.add(workspace, id, { kind: 'note', title: 'Needs input', message: reason });
       await records.setStatus(workspace, id, 'input');
     },
-    answerPermission: sessions.answer,
+    async handover(workspace, id, request) {
+      await handover.validate(workspace, id, request.role);
+      sessions.requestHandover(id, request);
+    },
+    resetHandovers: (workspace) => handover.reset(workspace),
+    async answerPermission(workspace, agent, id, decision) {
+      const row = (await permissions.pendingOf(workspace, agent)).find((request) => request.id === id);
+      if (row && isHandoverRow(row)) return handover.answer(workspace, row, decision);
+      return sessions.answer(workspace, agent, id, decision);
+    },
     async settleReviews(workspace) {
       const found = await store.getWorkspace(workspace);
       for (const agent of found?.agents ?? []) {
