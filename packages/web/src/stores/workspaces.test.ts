@@ -44,6 +44,7 @@ let answer: () => Promise<Response>;
 const fetchMock = vi.fn(async (path: string) => (path === '/api/workspaces' ? json(list) : answer()));
 
 beforeEach(() => {
+  sessionStorage.clear();
   setActivePinia(createPinia());
   list = [{ id: 'w1', goal: 'Goal', status: 'running' }];
   answer = async () => json(state());
@@ -118,5 +119,134 @@ describe('the workspaces store', () => {
     expect(useArtifacts().artifacts).toHaveLength(2);
     FakeEventSource.last.event({ type: 'artifact.version', workspace: 'w1', artifact: artifact('a3', 'ag'), version: 1 });
     expect(useArtifacts().currentId).toBe('a3');
+  });
+});
+
+describe('coming back to a workspace', () => {
+  const agent = (id: string, closed = false) => ({ id, role: 'coder', name: id, status: 'idle' as const, closed });
+  const artifact = (id: string, versions: number[] = [1], archived = false) => ({
+    id,
+    title: id,
+    kind: 'html',
+    renderer: 'html',
+    createdAt: at,
+    archived,
+    versions: versions.map((version) => ({ version, by: 'a1', note: '', at })),
+  });
+  type Tabs = { agents: ReturnType<typeof agent>[]; artifacts: ReturnType<typeof artifact>[] };
+  const of = (id: string, tabs: Tabs): WorkspaceState => ({
+    workspace: { id, goal: id, createdAt: at, agents: tabs.agents, repos: [], permissions: [], nudges: {} },
+    posts: [],
+    steps: [],
+    artifacts: tabs.artifacts,
+    answers: [],
+  });
+
+  let tabs: Record<string, Tabs>;
+  beforeEach(() => {
+    tabs = {
+      w1: { agents: [agent('a1'), agent('a2')], artifacts: [artifact('b1'), artifact('b2', [1, 2])] },
+      w2: { agents: [agent('c1'), agent('c2')], artifacts: [artifact('d1'), artifact('d2')] },
+    };
+    fetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/workspaces') return json(list);
+      const id = /^\/api\/workspaces\/([^/]+)$/.exec(path)?.[1];
+      return id ? json(of(id, tabs[id]!)) : json({});
+    });
+  });
+  afterEach(() => fetchMock.mockImplementation(async (path: string) => (path === '/api/workspaces' ? json(list) : answer())));
+
+  /** Opens w1, moves to its second agent and artifact, and goes to w2. */
+  const leaveW1 = async () => {
+    const store = useWorkspaces();
+    await store.open('w1');
+    useAgents().currentId = 'a2';
+    useArtifacts().open('b2');
+    await flushPromises();
+    await store.open('w2');
+    await flushPromises();
+    return store;
+  };
+  const shown = () => [useAgents().current?.id, useArtifacts().currentId];
+
+  it('starts on the first tabs, and returns to the ones you were on, per workspace', async () => {
+    const store = await leaveW1();
+    expect(shown()).toEqual(['c1', 'd1']);
+    useAgents().currentId = 'c2';
+    useArtifacts().open('d2');
+    await flushPromises();
+
+    await store.open('w1');
+    await flushPromises();
+    expect(shown()).toEqual(['a2', 'b2']);
+
+    await store.open('w2');
+    await flushPromises();
+    expect(shown()).toEqual(['c2', 'd2']);
+  });
+
+  it('survives going through defaults: opening does not overwrite what was saved', async () => {
+    const store = await leaveW1();
+    await store.open('w1');
+    await flushPromises();
+    await store.open('w2');
+    await flushPromises();
+    await store.open('w1');
+    await flushPromises();
+    expect(shown()).toEqual(['a2', 'b2']);
+  });
+
+  it('uses the first tab if the saved agent was closed or the saved artifact archived', async () => {
+    const store = await leaveW1();
+    tabs.w1 = { agents: [agent('a1'), agent('a2', true)], artifacts: [artifact('b1'), artifact('b2', [1, 2], true)] };
+    await store.open('w1');
+    await flushPromises();
+    expect(shown()).toEqual(['a1', 'b1']);
+  });
+
+  it('opens the latest version of the saved artifact', async () => {
+    const store = useWorkspaces();
+    await store.open('w1');
+    useArtifacts().open('b2', 1);
+    await flushPromises();
+    expect(useArtifacts().viewing).toBe(1);
+    await store.open('w2');
+    await flushPromises();
+    await store.open('w1');
+    await flushPromises();
+    expect(useArtifacts().currentId).toBe('b2');
+    expect(useArtifacts().viewing).toBe(2);
+  });
+
+  it('does not jump to the saved tab on a live reload', async () => {
+    const store = useWorkspaces();
+    await store.open('w1');
+    sessionStorage.setItem('drums.tabs.w1', JSON.stringify({ agent: 'a2', artifact: 'b2' }));
+    FakeEventSource.last.listeners.ready?.();
+    await flushPromises();
+    expect(shown()).toEqual(['a1', 'b1']);
+    expect(store.currentId).toBe('w1');
+  });
+
+  it('keeps the tab you moved to during a live reload, and restores once if the stream connects first', async () => {
+    const store = await leaveW1();
+    let respond: (response: Response) => void = () => {};
+    fetchMock.mockImplementationOnce(() => new Promise((resolve) => (respond = resolve)));
+    const opening = store.open('w1');
+    FakeEventSource.last.listeners.ready?.();
+    await flushPromises();
+    expect(shown()).toEqual(['a2', 'b2']);
+
+    useAgents().currentId = 'a1';
+    respond(json(of('w1', tabs.w1!)));
+    await opening;
+    await flushPromises();
+    expect(shown()).toEqual(['a1', 'b2']);
+  });
+
+  it('survives a broken stored value', async () => {
+    sessionStorage.setItem('drums.tabs.w1', '{nope');
+    await useWorkspaces().open('w1');
+    expect(shown()).toEqual(['a1', 'b1']);
   });
 });

@@ -1,11 +1,12 @@
 import type { AgentId, ArtifactId, CreateWorkspaceRequest, DomainEvent, WorkspaceId, WorkspaceState, WorkspaceSummary } from '@drums/protocol';
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { api } from '../api/client';
 import { subscribe } from '../api/live';
 import { useAgents } from './agents';
 import { useAnswers } from './answers';
 import { useArtifacts } from './artifacts';
+import { recallTabs, rememberTabs } from './last-tabs';
 import { useMap } from './map';
 import { useNews } from './news';
 import { useThreads } from './threads';
@@ -61,6 +62,20 @@ export const useWorkspaces = defineStore('workspaces', () => {
     }, LIST_REFRESH_MS);
   };
 
+  /** The workspace whose tabs are on screen. Unset while one opens, when the tabs are cleared and then default to the first. */
+  let tabsShownFor: WorkspaceId | undefined;
+
+  watch([() => agents.currentId, () => artifacts.currentId], ([agent, artifact]) => {
+    if (tabsShownFor !== undefined && tabsShownFor === currentId.value) rememberTabs(tabsShownFor, { agent, artifact });
+  });
+
+  /** Once per `open`, so later reloads leave the tabs alone. A saved tab that is gone keeps the default. */
+  const restoreTabs = (id: WorkspaceId) => {
+    const { agent, artifact } = recallTabs(id);
+    if (agents.open.some((a) => a.id === agent)) agents.currentId = agent;
+    if (artifacts.shown.some((a) => a.id === artifact)) artifacts.open(artifact!);
+  };
+
   /** Events that arrive while a reload is on its way: the state it returns may be older than they are. */
   const inFlight = new Set<DomainEvent[]>();
 
@@ -71,6 +86,8 @@ export const useWorkspaces = defineStore('workspaces', () => {
       const state = await api.workspace(id);
       if (id === currentId.value) {
         loadState(state);
+        if (tabsShownFor !== id) restoreTabs(id);
+        tabsShownFor = id;
         missed.forEach(dispatch);
       }
     } finally {
@@ -110,6 +127,7 @@ export const useWorkspaces = defineStore('workspaces', () => {
   const open = async (id: WorkspaceId) => {
     unsubscribe?.();
     clearDownTimer();
+    tabsShownFor = undefined;
     currentId.value = id;
     news.update(workspaces.value, id);
     ui.railNews = false;
