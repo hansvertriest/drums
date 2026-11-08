@@ -152,6 +152,68 @@ describe('picking roles for a new workspace', () => {
   });
 });
 
+describe('naming the agents for a new workspace', () => {
+  const repos = [{ name: 'api', base: 'main' }];
+
+  it('skips the picker and starts exactly these agents with exactly this text and title', async () => {
+    const { services, picker, backend } = createHarness();
+    const { workspace, posts } = await services.workspaces.create({
+      goal: 'Slack message slack:C1:1.2',
+      title: 'Fix the invoice export',
+      repos,
+      agents: [
+        { role: 'coder', instruction: 'Fix it' },
+        { role: 'reviewer', instruction: 'Check it' },
+      ],
+    });
+    expect(picker.asked).toEqual([]);
+    expect(workspace.title).toBe('Fix the invoice export');
+    expect(workspace.agents.map((a) => [a.role, a.status])).toEqual([['coder', 'running'], ['reviewer', 'running']]);
+    expect(posts.map((p) => (p.kind === 'message' ? p.text : ''))).toEqual(['Fix it', 'Check it']);
+    expect(backend.sessions.map((s) => s.received[0])).toEqual([expect.stringMatching(/Fix it$/), expect.stringMatching(/Check it$/)]);
+  });
+
+  it('starts a role twice when asked to, under different names', async () => {
+    const { services } = createHarness();
+    const { workspace } = await services.workspaces.create({
+      goal: 'Two',
+      agents: [
+        { role: 'researcher', instruction: 'One side' },
+        { role: 'researcher', instruction: 'The other' },
+      ],
+    });
+    expect(workspace.agents.map((a) => a.role)).toEqual(['researcher', 'researcher']);
+    expect(new Set(workspace.agents.map((a) => a.name)).size).toBe(2);
+  });
+
+  it('goes without a title when the request has agents but no title', async () => {
+    const { services, picker } = createHarness();
+    picker.title = 'From the picker';
+    const { workspace } = await services.workspaces.create({ goal: 'Goal', agents: [{ role: 'scoper', instruction: 'Go' }] });
+    expect(workspace.title).toBeUndefined();
+  });
+
+  it('lets a title replace the one the picker made', async () => {
+    const { services, picker } = createHarness();
+    picker.title = 'From the picker';
+    const { workspace } = await services.workspaces.create({ goal: 'Goal', title: 'Mine' });
+    expect(workspace.title).toBe('Mine');
+    expect(picker.asked).toHaveLength(1);
+  });
+
+  it.each([
+    ['an unknown role', { repos, agents: [{ role: 'scoper', instruction: 'x' }, { role: 'wizard', instruction: 'x' }] }, /Unknown role: wizard/],
+    ['a role needing a repo without one', { agents: [{ role: 'coder', instruction: 'x' }] }, /coder needs a repo/],
+  ])('refuses %s before anything exists', async (_name, request, message) => {
+    const { services, picker, code, backend } = createHarness();
+    await expect(services.workspaces.create({ goal: 'x', ...request })).rejects.toMatchObject({ name: 'InvalidError', message: expect.stringMatching(message) });
+    expect(code.state.worktrees).toEqual([]);
+    expect(picker.asked).toEqual([]);
+    expect(backend.sessions).toEqual([]);
+    expect(await services.workspaces.list()).toEqual([]);
+  });
+});
+
 describe('archiving', () => {
   it('stops the agents, marks it in the list, refuses messages until restored, and resumes them after', async () => {
     const { services, backend, store } = createHarness();
