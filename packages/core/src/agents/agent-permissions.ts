@@ -34,7 +34,7 @@ export function createAgentPermissions({ store, events, clock }: { store: Store;
   return {
     pendingOf,
     settle,
-    async add(workspace: WorkspaceId, agent: AgentId, call: { id: string; tool: string; title: string; detail: string }) {
+    async add(workspace: WorkspaceId, agent: AgentId, call: Pick<PermissionRequest, 'id' | 'tool' | 'title' | 'detail' | 'handover'>) {
       const request: PermissionRequest = { ...call, agent, at: clock.now().toISOString(), status: 'pending' };
       await save(workspace, (requests) => [...requests, request]);
       announce(workspace, request);

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFsStore } from './store.js';
 
 const at = '2026-01-01T00:00:00.000Z';
-const workspace: Workspace = { id: 'w1', goal: 'Goal', createdAt: at, agents: [], repos: [], permissions: [], nudges: {} };
+const workspace: Workspace = { id: 'w1', goal: 'Goal', createdAt: at, agents: [], repos: [], permissions: [], nudges: {}, handoversInARow: 0 };
 
 let root: string;
 let store: Store;

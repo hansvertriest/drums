@@ -1,10 +1,11 @@
-import type { Agent, AgentId, ArtifactId, Post, VersionNumber } from '@drums/protocol';
+import type { Agent, AgentId, ArtifactId, HandoverPost, Post, VersionNumber } from '@drums/protocol';
 
 /** Posts an agent wrote, as opposed to what the user sent it. */
-export type AuthoredPost = Extract<Post, { kind: 'note' | 'version' | 'checkpoint' }>;
+export type AuthoredPost = Extract<Post, { kind: 'note' | 'version' | 'checkpoint' }> | (HandoverPost & { direction: 'sent' });
 
+/** A handover counts once: the receiving side is the same event, seen from the other thread. */
 export const isAuthored = (post: Post): post is AuthoredPost =>
-  post.kind === 'note' || post.kind === 'version' || post.kind === 'checkpoint';
+  post.kind === 'note' || post.kind === 'version' || post.kind === 'checkpoint' || (post.kind === 'handover' && post.direction === 'sent');
 
 export interface FeedEntry {
   seq: number;
@@ -32,15 +33,15 @@ export function toFeed(posts: readonly Post[], members: readonly Agent[], reader
     .filter((post) => post.agent !== reader && post.seq > since)
     .slice(-limit)
     .map((post): FeedEntry => {
+      const nameOf = (id: AgentId) => members.find((agent) => agent.id === id)?.name ?? id;
       const author = members.find((agent) => agent.id === post.agent);
       return {
         seq: post.seq,
-        by: author?.name ?? post.agent,
+        by: nameOf(post.agent),
         ...(author ? { role: author.role } : {}),
-        title: post.title,
-        message: post.message,
+        ...(post.kind === 'handover' ? { title: `Handed over to ${nameOf(post.peer)}`, message: post.instruction } : { title: post.title, message: post.message }),
         at: post.at,
-        ...(post.kind !== 'note' ? { artifact: post.artifact, version: post.version } : {}),
+        ...(post.kind === 'version' || post.kind === 'checkpoint' ? { artifact: post.artifact, version: post.version } : {}),
       };
     });
   return { posts: entries, cursor: Math.max(since, ...posts.map((post) => post.seq)) };

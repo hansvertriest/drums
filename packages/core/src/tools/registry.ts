@@ -5,6 +5,7 @@ import { artifactReadTool } from './artifact-read.js';
 import { artifactUpdateTool } from './artifact-update.js';
 import { checkpointTool } from './checkpoint.js';
 import { feedTool } from './feed.js';
+import { handoverTool } from './handover.js';
 import { impactTool } from './impact.js';
 import { postTool } from './post.js';
 import { requestInputTool } from './request-input.js';
@@ -18,6 +19,7 @@ export const tools: readonly ToolDefinition[] = [
   artifactCreateTool,
   artifactUpdateTool,
   requestInputTool,
+  handoverTool,
   feedTool,
   checkpointTool,
   impactTool,

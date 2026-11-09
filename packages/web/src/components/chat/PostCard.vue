@@ -56,6 +56,15 @@ const show = (artifact: string, version?: number) => {
     <time>{{ shortTime(post.at) }}</time>
   </div>
 
+  <article v-else-if="post.kind === 'handover'" class="post">
+    <header>
+      <span class="by">{{ agents.nameOf(post.direction === 'sent' ? post.agent : post.peer) }}</span>
+      <time>{{ shortTime(post.at) }}</time>
+    </header>
+    <h3>Handed over to {{ agents.nameOf(post.direction === 'sent' ? post.peer : post.agent) }}</h3>
+    <div class="md" v-html="renderMarkdown(post.instruction)" />
+  </article>
+
   <article v-else class="post">
     <p class="by">{{ agents.nameOf(post.agent) }} · {{ shortTime(post.at) }}</p>
     <h3>{{ post.title }}</h3>

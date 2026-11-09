@@ -24,6 +24,7 @@ describe('starting', () => {
       'artifact_create',
       'artifact_update',
       'request_input',
+      'handover',
       'feed',
     ]);
     expect((await status()).status).toBe('running');

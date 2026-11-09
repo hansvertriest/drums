@@ -11,7 +11,7 @@ import { useWorkspaces } from './stores/workspaces';
 const at = '2026-01-01T10:00:00.000Z';
 const summary: WorkspaceSummary = { id: 'w1', goal: 'Scope checkout', status: 'review' };
 const state = (id: string): WorkspaceState => ({
-  workspace: { id, goal: 'Goal', createdAt: at, agents: [{ id: 'ag', role: 'scoper', name: 'Scoper', status: 'idle' }], repos: [], permissions: [], nudges: {} },
+  workspace: { id, goal: 'Goal', createdAt: at, agents: [{ id: 'ag', role: 'scoper', name: 'Scoper', status: 'idle' }], repos: [], permissions: [], nudges: {}, handoversInARow: 0 },
   posts: [],
   steps: [],
   artifacts: [],

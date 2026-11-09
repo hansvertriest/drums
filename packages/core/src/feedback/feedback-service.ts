@@ -36,7 +36,7 @@ export interface FeedbackServiceDeps {
   artifacts: ArtifactService;
   posts: PostService;
   /** Supplied lazily: artifacts call `carryOver`, and agents hold artifacts. */
-  agents: () => Pick<AgentService, 'reserve' | 'deliver' | 'release'>;
+  agents: () => Pick<AgentService, 'reserve' | 'deliver' | 'release' | 'resetHandovers'>;
   code: () => Pick<CodeService, 'pendingReviews' | 'markDelivered'>;
   roles: RoleRegistry;
 }
@@ -134,6 +134,7 @@ export function createFeedbackService(deps: FeedbackServiceDeps): FeedbackServic
         const reserved = new Set(recipients);
         let remaining = overall;
         try {
+          await agents.resetHandovers(workspace);
           for (const [agent, { items, code }] of groups) {
             reserved.delete(agent);
             const message = formatFeedback(items, remaining, code);

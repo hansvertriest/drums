@@ -5,6 +5,7 @@ import { NotFoundError } from '../errors.js';
 import type { Store } from '../ports/store.js';
 import type { PostService } from '../posts/post-service.js';
 import type { FeedEntry } from '../posts/feed.js';
+import type { RoleRegistry } from '../roles/registry.js';
 import { escapeXml } from '../text/escape-xml.js';
 
 const RECENT_POSTS = 5;
@@ -15,6 +16,8 @@ export interface OverviewData {
   /** Who reads it. Absent when the agent doesn't exist yet: the role picker gets the overview too. */
   reader?: Agent;
   agents: Agent[];
+  /** The roles this workspace can hand over to. Only for a reader: tool descriptions are static, so it learns them here. */
+  roles?: Array<{ id: string; summary: string }>;
   artifacts: Artifact[];
   posts: FeedEntry[];
   /** On code: the branch and how far it got. */
@@ -26,7 +29,7 @@ const clip = (text: string, length: number) => (text.length > length ? `${text.s
 const section = (title: string, lines: string[]) => (lines.length > 0 ? [`  ${title}:`, ...lines.map((line) => `    - ${line}`)] : []);
 
 /** Spec §4.2: pointers, not content. Agents fetch the detail with their tools. Everything here was typed by someone else. */
-export function formatOverview({ goal, reader, agents, artifacts, posts, code }: OverviewData): string {
+export function formatOverview({ goal, reader, agents, roles = [], artifacts, posts, code }: OverviewData): string {
   const nameOf = (id: AgentId) => escapeXml(agents.find((agent) => agent.id === id)?.name ?? id);
   const others = agents.filter((agent) => agent.id !== reader?.id && !agent.closed);
   return [
@@ -41,6 +44,7 @@ export function formatOverview({ goal, reader, agents, artifacts, posts, code }:
       ),
     ),
     ...section('other agents', others.map((agent) => `${escapeXml(agent.name)} (${escapeXml(agent.role)}), ${agent.status}`)),
+    ...section('roles you can hand over to', roles.map(({ id, summary }) => `${escapeXml(id)}: ${escapeXml(summary)}`)),
     ...section(
       'artifacts',
       artifacts.flatMap(({ id, title, versions }) => {
@@ -63,11 +67,12 @@ export interface OverviewDeps {
   store: Store;
   artifacts: ArtifactService;
   posts: PostService;
+  roles: Pick<RoleRegistry, 'list'>;
   code(): Pick<CodeService, 'mapState'>;
 }
 
 /** The overview as it stands now, for the agent `reader`, or for the role picker if there is no agent yet. */
-export async function workspaceOverview({ store, artifacts, posts, code }: OverviewDeps, id: WorkspaceId, reader?: AgentId): Promise<string> {
+export async function workspaceOverview({ store, artifacts, posts, roles, code }: OverviewDeps, id: WorkspaceId, reader?: AgentId): Promise<string> {
   const workspace = await store.getWorkspace(id);
   if (!workspace) throw new NotFoundError(`No workspace ${id}.`);
   const [artifactViews, feed] = await Promise.all([artifacts.list(id), posts.feed(id, reader ?? '')]);
@@ -75,7 +80,7 @@ export async function workspaceOverview({ store, artifacts, posts, code }: Overv
   const map = workspace.branch ? await code().mapState(id) : undefined;
   return formatOverview({
     goal: workspace.goal,
-    ...(self ? { reader: self } : {}),
+    ...(self ? { reader: self, roles: roles.list().filter((role) => !role.needsRepo || workspace.repos.length > 0) } : {}),
     agents: workspace.agents,
     artifacts: artifactViews.filter((artifact) => !artifact.archived),
     posts: feed.posts.slice(-RECENT_POSTS),

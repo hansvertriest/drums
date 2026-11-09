@@ -43,6 +43,8 @@ export const Workspace = z.object({
   /** Every permission request, answered or not: the thread shows them as rows. */
   permissions: z.array(PermissionRequest).default([]),
   nudges: NudgeCounts.default({}),
+  /** Handovers since the user last sent something: what stops agents passing work around without end. */
+  handoversInARow: z.number().int().nonnegative().default(0),
   /** Archived by the user: out of the strip, its sessions stopped, until it is restored. */
   archivedAt: z.iso.datetime().optional(),
 });

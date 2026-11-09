@@ -15,11 +15,11 @@ This document is for the agents building drums. Read it fully before writing cod
 | Term | Meaning |
 |---|---|
 | **Workspace** | One goal, e.g. "Checkout v2". Has agents, artifacts and a feed. May have repos attached; then it also has one branch name, shared by all its repos. |
-| **Agent** | One Claude Code session with a role, inside one workspace. Agents in a workspace are peers and run in parallel. |
+| **Agent** | One Claude Code session with a role, inside one workspace. Agents in a workspace are peers and run in parallel. One can pass work to another with a handover (§4.1). |
 | **Role** | What an agent is for: Scoper, Researcher, Designer, Coder, Reviewer. Defines its prompt, its tools and its default artifact kind. Roles are a registry; more will be added. |
 | **Artifact** | A living document shared by all agents in the workspace, with versions. Most are HTML; the branch map is a special kind. Any agent may post a new version of any artifact. |
 | **Version** | An immutable snapshot of an artifact, with its author (an agent), a one-line note of what changed, and a time. |
-| **Post** | An entry in an agent's thread: a new artifact version, a code checkpoint, or a note (a post without an artifact). |
+| **Post** | An entry in an agent's thread: a new artifact version, a code checkpoint, a note (a post without an artifact), or a handover. |
 | **Checkpoint** | A version of the branch map: a dyffle post with a change, across all repos the workspace touched. |
 | **Answer** | A value the user set in an artifact's controls. Unsent answers are pending. |
 | **Feedback** | What **Send** delivers to an agent: the answers for artifacts it authored, line comments on code, and an overall note. |
@@ -207,6 +207,7 @@ web/src/
   - the role's tools
 - **Saving:** the session id is stored, so agents resume after a restart.
 - **Status:** `running` while a turn is in progress, `review` when it ends normally, `input` after `request_input` or while a permission prompt waits, `idle` after Stop or a PR.
+- **Handover:** an agent calls `handover` when its part is done, and drums continues with that role's newest open agent, or starts one if it has none. It is recorded when the tool is called and fires only when the turn really ends: after the end-of-turn checks and any nudge they cause, with outcome success and no Stop or `request_input`. Anything else drops it. A role with `handoverNeedsOk` (the Coder) gets an allow/deny row in the sender's thread first. A receiver that is running or waiting on you refuses it, as does a fourth handover in a row (a message or Send resets the count), and a refusal shows in the sender's thread with the sender on `input`. After a handover that fired the sender goes `idle`, not `review`, since `review` would claim the workspace is ready while the next agent works. The receiver gets the instruction in a `<drums-handover from="…">` block.
 - **Stop** interrupts the session.
 - **Close** ends the session for good and takes the agent's tab away. What it posted stays, and its name still shows on it.
 - **Access:** `shell-and-files`, which every role has, is the user's own Claude Code setup: shell, files, web, MCP servers, skills, plugins, hooks and CLAUDE.md. Only `AskUserQuestion` and plan mode stay off, since `request_input` does that job. Sessions run in `auto`: a classifier approves or denies each call, and what it can't decide sets the agent to `input` with an allow/deny row in its thread. Without `auto` on the account or model, everything that needs approval gets a row. The working directory is not a security boundary. `tools-only` remains for a role that should have nothing but its tools. Changing code stays the Coder's job, by its prompt.
@@ -216,7 +217,7 @@ web/src/
 
 ### 4.2 Context the agent gets
 
-- **First turn:** a short workspace overview: goal, the other agents and their roles, each artifact with its latest version and author, the last few posts, and on code the branch and a change summary. It contains pointers, not content; the agent fetches detail with its tools.
+- **First turn:** a short workspace overview: goal, the other agents and their roles, the roles it can hand over to, each artifact with its latest version and author, the last few posts, and on code the branch and a change summary. It contains pointers, not content; the agent fetches detail with its tools.
 - **Every message:** a focus block in front of the user's text:
 
   ```
@@ -292,6 +293,7 @@ Line comments use the Markdown that `dyffle comments` produces.
 | `checkpoint({title, message})` | a branch-map version across the repos it touched | dyffle post with `change: true` |
 | `impact({target?})` | dyffle `query()`: callers, routes, tests, breakage; no target = branch summary | needs dyffle plan items 1–3 |
 | `request_input({reason})` | sets the agent to Needs input | |
+| `handover({role, instruction})` | passes the work to another role when this turn ends | one per turn; see §4.1 |
 | `feed({since?})` | other agents' posts in this workspace | for coordination |
 
 The tool server knows the calling agent, so attribution is automatic.

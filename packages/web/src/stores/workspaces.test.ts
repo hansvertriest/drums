@@ -10,7 +10,7 @@ import { useWorkspaces } from './workspaces';
 const at = '2026-01-01T10:00:00.000Z';
 const scoper = { id: 'ag', role: 'scoper', name: 'Scoper', status: 'running' as const };
 const state = (posts: Post[] = []): WorkspaceState => ({
-  workspace: { id: 'w1', goal: 'Goal', createdAt: at, agents: [scoper], repos: [], permissions: [], nudges: {} },
+  workspace: { id: 'w1', goal: 'Goal', createdAt: at, agents: [scoper], repos: [], permissions: [], nudges: {}, handoversInARow: 0 },
   posts,
   steps: [],
   artifacts: [],
@@ -135,7 +135,7 @@ describe('coming back to a workspace', () => {
   });
   type Tabs = { agents: ReturnType<typeof agent>[]; artifacts: ReturnType<typeof artifact>[] };
   const of = (id: string, tabs: Tabs): WorkspaceState => ({
-    workspace: { id, goal: id, createdAt: at, agents: tabs.agents, repos: [], permissions: [], nudges: {} },
+    workspace: { id, goal: id, createdAt: at, agents: tabs.agents, repos: [], permissions: [], nudges: {}, handoversInARow: 0 },
     posts: [],
     steps: [],
     artifacts: tabs.artifacts,
