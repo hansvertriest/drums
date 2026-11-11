@@ -35,8 +35,6 @@ export interface CodeReviewSession {
   subscribe(listener: (event: CodeReviewEventType) => void): () => void;
   /** A symbol or file's connections, or a summary of the branch with no target. Never throws on a bad target. */
   impact(target?: string): Promise<ImpactResult>;
-  /** `body` with the branch's report in its dyffle section, replacing any earlier one. */
-  withReport(body: string): Promise<string>;
   /** A stopped session stays stopped. `open` on the same worktree resumes it: commit dyffles and reviews are kept. */
   stop(): Promise<void>;
 }

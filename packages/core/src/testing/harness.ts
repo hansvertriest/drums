@@ -62,7 +62,6 @@ export function createHarness() {
     rolePicker: picker,
     git: code.git,
     dependencies: code.dependencies,
-    pullRequests: code.pullRequests,
     projects: code.projects,
     codeReview: code.codeReview,
     viewerUrl: (workspace, repo) => `http://drums/map/${workspace}/${repo}/`,

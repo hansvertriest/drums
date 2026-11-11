@@ -4,8 +4,6 @@ import {
   ApiError as ApiErrorBody,
   Artifact,
   MapState,
-  OpenPrsResponse,
-  PrDrafts,
   ProjectList,
   VersionResponse,
   WorkspaceList,
@@ -13,7 +11,6 @@ import {
   type Answer,
   type CreateWorkspaceRequest,
   type ImageType,
-  type OpenPrsRequest,
   type PermissionDecision,
   type Focus,
   type VersionNumber,
@@ -68,8 +65,6 @@ export const api = {
   saveAnswers: (ws: string, artifact: string, version: VersionNumber, answers: Answer[]) =>
     request(`${workspacePath(ws)}/artifacts/${encodeURIComponent(artifact)}/answers`, AnswerSet, withBody('PUT', { version, answers })),
   map: (ws: string) => request(`${workspacePath(ws)}/map`, MapState),
-  prDrafts: (ws: string) => request(`${workspacePath(ws)}/prs`, PrDrafts),
-  openPrs: (ws: string, body: OpenPrsRequest) => request(`${workspacePath(ws)}/prs`, OpenPrsResponse, withBody('POST', body)),
   answerPermission: (ws: string, agent: string, id: string, decision: PermissionDecision) =>
     request<void>(`${workspacePath(ws)}/agents/${encodeURIComponent(agent)}/permissions/${encodeURIComponent(id)}`, undefined, withBody('POST', { decision })),
   send: (ws: string, body: { overall?: string | undefined; to?: string | undefined }) =>

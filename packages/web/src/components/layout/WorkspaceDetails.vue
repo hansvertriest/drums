@@ -6,13 +6,12 @@ import { useMap } from '../../stores/map';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
 import ResponsivePanel from '../shared/ResponsivePanel.vue';
-import PrLinks from './PrLinks.vue';
 
 const workspaces = useWorkspaces();
 const agents = useAgents();
 const map = useMap();
 const ui = useUi();
-const { statusLabel, openPrsLabel } = useWorkspaceSummary();
+const { statusLabel } = useWorkspaceSummary();
 const close = () => (ui.detailsOpen = false);
 
 const repos = computed(() => map.repos.map((repo) => repo.name).join(', '));
@@ -22,11 +21,6 @@ const archive = () => {
   if (archived && !window.confirm('Archive this workspace? Its agents stop. Worktrees, branches and everything posted stay, and you can restore it.')) return;
   close();
   void workspaces.setArchived(archived).catch(ui.report);
-};
-
-const openPrs = () => {
-  close();
-  ui.openPrsOpen = true;
 };
 </script>
 
@@ -44,16 +38,9 @@ const openPrs = () => {
         <dt>Repos</dt>
         <dd><code>{{ repos }}</code></dd>
       </template>
-      <template v-if="map.opened.length > 0">
-        <dt>PRs</dt>
-        <dd><PrLinks /></dd>
-      </template>
     </dl>
     <div class="acts">
       <button type="button" class="action-button" @click="archive">{{ workspaces.current?.archived ? 'Restore' : 'Archive' }}</button>
-      <button v-if="map.changed.length > 0" type="button" class="action-button primary phone-only" @click="openPrs">
-        {{ openPrsLabel }}
-      </button>
     </div>
   </ResponsivePanel>
 </template>

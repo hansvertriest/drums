@@ -80,11 +80,11 @@ describe('the bars on code', () => {
     return wrapper.get('[role="dialog"][aria-label="Workspace details"]');
   };
 
-  it('has Open PR and the comment count in the bar, the branch and repos in the details', async () => {
+  it('has the comment count in the bar, the branch and repos in the details, and no PR button', async () => {
     const wrapper = app([repo('shop', { pendingComments: 2 })]);
     await flushPromises();
     const bar = wrapper.get('header.stage-bar');
-    expect(bar.text()).toContain('Open PR');
+    expect(bar.text()).not.toContain('Open PR');
     expect(bar.get('.send.primary .count').text()).toBe('2');
     const panel = await details(wrapper);
     expect(panel.text()).toContain('drums/paging');
@@ -103,15 +103,6 @@ describe('the bars on code', () => {
     expect(wrapper.find('[aria-label="Workspace details"]').exists()).toBe(false);
   });
 
-  it('opens the PR dialog from the details, which is where a phone has it', async () => {
-    const wrapper = app();
-    await flushPromises();
-    const panel = await details(wrapper);
-    await panel.findAll('button').find((b) => b.text() === 'Open PR')!.trigger('click');
-    expect(useUi().openPrsOpen).toBe(true);
-    expect(useUi().detailsOpen).toBe(false);
-  });
-
   it('moves the name to the stage bar when the chat is folded', async () => {
     const wrapper = app();
     await flushPromises();
@@ -119,16 +110,6 @@ describe('the bars on code', () => {
     await wrapper.get('[aria-label="Collapse chat"]').trigger('click');
     expect(wrapper.get('.stage-bar .crumb').text()).toBe('Add paging');
     useUi().toggleRail();
-  });
-
-  it('shows open PRs, and no button once every changed repo has one', async () => {
-    const wrapper = app([repo('shop', { pr: { number: 12, url: 'https://x/pull/12' } })]);
-    useWorkspaces().workspaces = [{ ...summary, status: 'pr' }];
-    await flushPromises();
-    expect(wrapper.get('.heading').text()).toContain('PR #12 open');
-    const bar = wrapper.get('header.stage-bar');
-    expect(bar.get('.prs a').attributes('href')).toBe('https://x/pull/12');
-    expect(bar.findAll('button').map((b) => b.text())).not.toContain('Open PR');
   });
 
   it('routes comments in the Send panel to whoever the server names', async () => {

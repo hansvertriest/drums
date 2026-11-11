@@ -25,9 +25,6 @@ defineProps<{ status?: string }>();
 .st-review {
   background: var(--add);
 }
-.st-pr {
-  background: var(--pr);
-}
 @keyframes pulse {
   50% {
     opacity: 0.25;

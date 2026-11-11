@@ -25,7 +25,7 @@ This document is for the agents building drums. Read it fully before writing cod
 | **Feedback** | What **Send** delivers to an agent: the answers for artifacts it authored, line comments on code, and an overall note. |
 | **Focus** | What the user is looking at when they send a message: artifact and version, map file, selected diff lines. Sent along with every message so "review this" is unambiguous. |
 
-Agent statuses: `running`, `input` (needs you), `review` (ready for review), `idle`. A workspace shows the state that most needs you: `input`, then `review`, then `running`, then `pr` (PRs open), then `idle`.
+Agent statuses: `running`, `input` (needs you), `review` (ready for review), `idle`. A workspace shows the state that most needs you: `input`, then `review`, then `running`, then `idle`.
 
 ---
 
@@ -34,7 +34,7 @@ Agent statuses: `running`, `input` (needs you), `review` (ready for review), `id
 The mockup is the source of truth. The decisions behind it:
 
 - **Minimal.** Short labels, no explanatory text in the chrome, no type or kind pickers.
-- **Header:** full width, 60px. The logo sits in a 60px cell on the left, above the task strip, so the header line and the strip's edge meet in one corner. Then the workspace title, a short subline (agent count, branch and repos when present), the workspace status, **Open PR(s)** for code, and **Send** (it fills in and shows a count when something is pending).
+- **Header:** full width, 60px. The logo sits in a 60px cell on the left, above the task strip, so the header line and the strip's edge meet in one corner. Then the workspace title, a short subline (agent count, branch and repos when present), the workspace status, and **Send** (it fills in and shows a count when something is pending).
 - **Workspace strip:** a 60px column of icons (initials plus a status dot, and a blue dot for news since you looked). Hovering opens it over the page, without moving anything, to show each workspace's title, status, the role that posted last, and `+/−` line counts for code. **New workspace** is at the bottom.
 - **Chat rail:**
   - **Tabs:** one per agent, each with a status dot, plus `+` to add an agent. There is **no merged "All" feed**. Messages go to the agent whose tab is open.
@@ -105,7 +105,7 @@ core/src/
   ports/            interfaces only
     agent-backend.ts   start a session, send a message, interrupt, resume; streams AgentEvents
     store.ts           workspaces, agents, posts, artifacts, answers
-    git.ts             worktrees, branches, push
+    git.ts             worktrees, branches, changes
     code-review.ts     the subset of dyffle drums uses (see §7)
     role-picker.ts     goal → [{ role, instruction }]
     clock.ts, ids.ts
@@ -168,7 +168,7 @@ server/src/
     stdio.ts              the same registry as a standalone MCP server (@modelcontextprotocol/sdk), for other clients
   http/
     app.ts                Hono app
-    routes/               one file per resource: workspaces, agents, messages, artifacts, answers, feedback, map, prs
+    routes/               one file per resource: workspaces, agents, messages, artifacts, answers, feedback, map
     stream.ts             Server-Sent Events: domain events per workspace
 ```
 
@@ -187,7 +187,7 @@ web/src/
     chat/       AgentTabs, Thread, PostCard, Composer, FocusChip, StepsToggle
     artifacts/  ArtifactTabs, VersionPicker, renderers/ (one per artifact kind: HtmlArtifact, BranchMap)
     map/        MapFrame, DiffSheet
-    dialogs/    NewWorkspace, AddAgent, SendPopover, OpenPrs
+    dialogs/    NewWorkspace, AddAgent, SendPopover
   renderers.ts  artifact kind → renderer component registry (mirrors core's kinds)
 ```
 
@@ -206,7 +206,7 @@ web/src/
   - the role prompt and the artifact contract (§5.1)
   - the role's tools
 - **Saving:** the session id is stored, so agents resume after a restart.
-- **Status:** `running` while a turn is in progress, `review` when it ends normally, `input` after `request_input` or while a permission prompt waits, `idle` after Stop or a PR.
+- **Status:** `running` while a turn is in progress, `review` when it ends normally, `input` after `request_input` or while a permission prompt waits, `idle` after Stop.
 - **Handover:** an agent calls `handover` when its part is done, and drums continues with that role's newest open agent, or starts one if it has none. It is recorded when the tool is called and fires only when the turn really ends: after the end-of-turn checks and any nudge they cause, with outcome success and no Stop or `request_input`. Anything else drops it. A role with `handoverNeedsOk` (the Coder) gets an allow/deny row in the sender's thread first. A receiver that is running or waiting on you refuses it, as does a fourth handover in a row (a message or Send resets the count), and a refusal shows in the sender's thread with the sender on `input`. After a handover that fired the sender goes `idle`, not `review`, since `review` would claim the workspace is ready while the next agent works. The receiver gets the instruction in a `<drums-handover from="…">` block.
 - **Stop** interrupts the session.
 - **Close** ends the session for good and takes the agent's tab away. What it posted stays, and its name still shows on it.
@@ -233,7 +233,7 @@ web/src/
 
 Prompts are followed most of the time, not always, so the app checks when a turn ends:
 
-- **Uncommitted changes:** for a role that works on repos, if any worktree has uncommitted changes, the agent gets one short system message telling it to commit. drums never commits for it; whatever is still uncommitted is committed when the user opens the PRs.
+- **Uncommitted changes:** for a role that works on repos, if any worktree has uncommitted changes, the agent gets one short system message telling it to commit. drums never commits for it.
 - **An artifact file written without `artifact_update`:** the same nudge.
 - **Counting:** each nudge is counted per role. Frequent nudges mean the role prompt or the tool description needs fixing.
 
@@ -307,7 +307,7 @@ Call it before you change a symbol other code may depend on, to see who you coul
 break. Call it with no target after each step, before you commit.
 ```
 
-Role prompts describe the work loop around the tools. For the Coder: small steps; after each, run the tests, call `impact`, then commit with a message written for the reviewer; end every turn with the changes committed or with a `request_input`.
+Role prompts describe the work loop around the tools. For the Coder: small steps; after each, run the tests, call `impact`, then commit with a message written for the reviewer; end every turn with the changes committed or with a `request_input`. Agents use git and `gh` freely: drums doesn't stop them branching, pushing, opening pull requests or merging, and has no PR feature of its own.
 
 ---
 
@@ -323,7 +323,6 @@ drums uses dyffle (the `dyffle` package on npm, 0.8 or later) as a library and *
   - comments and Viewed state stay in each worktree's `.dyffle/reviews/`
   - drums reads and writes them through the session (`review()` / `saveReview()`)
   - Send routes them (§5.2)
-- **PRs:** one per repo with changes, the same title, linked to each other, each with its dyffle report embedded between the `dyffle:start`/`dyffle:end` markers (`markdownReport` + `embedSection`). After opening, agents that were ready for review go idle and the workspace shows `PR #n open`.
 - **All of this sits behind the `CodeReview` and `Git` ports.** `core` never imports dyffle.
 
 ---
@@ -373,7 +372,6 @@ POST   /api/workspaces/:ws/artifacts/:id/restore
 PUT    /api/workspaces/:ws/artifacts/:id/answers  { version, answers }
 POST   /api/workspaces/:ws/send             { overall? }  → routes pending feedback
 GET    /api/workspaces/:ws/map/...          the dyffle LiveSource data for the map iframe
-POST   /api/workspaces/:ws/prs              { title, repos: [{ name, body }] }
 ```
 
 One route file per resource, each registered in `http/app.ts`.

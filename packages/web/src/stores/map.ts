@@ -14,8 +14,6 @@ export const useMap = defineStore('map', () => {
 
   const current = computed(() => repos.value.find((repo) => repo.name === shown.value) ?? repos.value[0]);
   const pendingComments = computed(() => repos.value.reduce((total, repo) => total + repo.pendingComments, 0));
-  const changed = computed(() => repos.value.filter((repo) => repo.files > 0 && !repo.pr));
-  const opened = computed(() => repos.value.filter((repo) => repo.pr));
 
   const load = async (workspace: WorkspaceId) => {
     const state = await api.map(workspace);
@@ -31,5 +29,5 @@ export const useMap = defineStore('map', () => {
     commentsTo.value = undefined;
   };
 
-  return { repos, branch, shown, commentsTo, current, pendingComments, changed, opened, load, reset };
+  return { repos, branch, shown, commentsTo, current, pendingComments, load, reset };
 });

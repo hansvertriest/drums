@@ -115,7 +115,6 @@ export const useWorkspaces = defineStore('workspaces', () => {
     'map.changed': (event) => {
       if (event.aspect !== 'status') scheduleMapRefresh();
     },
-    'prs.opened': () => scheduleMapRefresh(),
   };
   function dispatch(event: DomainEvent) {
     (handlers[event.type] as (e: DomainEvent) => void)(event);

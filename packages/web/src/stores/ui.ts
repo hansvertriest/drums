@@ -30,7 +30,6 @@ export const useUi = defineStore('ui', () => {
   const newWorkspaceOpen = ref(false);
   const addAgentOpen = ref(false);
   const sendOpen = ref(false);
-  const openPrsOpen = ref(false);
   /** A refusal or failure to show the user. */
   const error = ref<string>();
 
@@ -47,7 +46,7 @@ export const useUi = defineStore('ui', () => {
   const chatNews = ref(false);
   /** Phones: the height left above the keyboard, while it is up. */
   const keyboardHeight = ref<number>();
-  /** The workspace's status, branch, PRs and archive button. */
+  /** The workspace's status, branch, repos and archive button. */
   const detailsOpen = ref(false);
   /** Where the list of versions opens, while it is open. */
   const versionsAt = ref<{ left: number; top: number }>();
@@ -82,7 +81,6 @@ export const useUi = defineStore('ui', () => {
     newWorkspaceOpen,
     addAgentOpen,
     sendOpen,
-    openPrsOpen,
     error,
     railCollapsed,
     railWidth,

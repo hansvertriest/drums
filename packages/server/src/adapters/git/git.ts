@@ -70,14 +70,5 @@ export function createExecaGit(): Git {
     },
     changes,
     hasUncommitted,
-    async commitAll(worktree, message) {
-      await run(worktree, 'add', '-A');
-      if (lines(await run(worktree, 'diff', '--cached', '--name-only')).length === 0) return false;
-      await run(worktree, 'commit', '-m', message);
-      return true;
-    },
-    async push(worktree, branch) {
-      await run(worktree, 'push', '-u', 'origin', `refs/heads/${branch}:refs/heads/${branch}`);
-    },
   };
 }

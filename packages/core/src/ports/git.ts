@@ -24,8 +24,4 @@ export interface Git {
   changes(worktree: string, base: string): Promise<BranchChanges>;
   /** Whether anything is uncommitted: changed, staged or untracked files that aren't ignored. */
   hasUncommitted(worktree: string): Promise<boolean>;
-  /** Commits whatever is uncommitted. False if there was nothing. */
-  commitAll(worktree: string, message: string): Promise<boolean>;
-  /** To `origin`, never forced. */
-  push(worktree: string, branch: string): Promise<void>;
 }

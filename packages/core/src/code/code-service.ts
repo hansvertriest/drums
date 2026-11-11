@@ -167,7 +167,7 @@ export function createCodeService(deps: CodeServiceDeps): CodeService {
               (error: unknown) => ({ error: message(error) }),
             ),
           ]);
-          return { name: repo.name, base: repo.base, ...changes, pendingComments: pending.comments, ...session, ...(repo.pr ? { pr: repo.pr } : {}) };
+          return { name: repo.name, base: repo.base, ...changes, pendingComments: pending.comments, ...session };
         }),
       );
       return { ...(branch ? { branch } : {}), repos: states };

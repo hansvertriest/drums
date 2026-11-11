@@ -2,7 +2,6 @@
 import { onBeforeUnmount, onMounted } from 'vue';
 import AddAgent from './components/dialogs/AddAgent.vue';
 import NewWorkspace from './components/dialogs/NewWorkspace.vue';
-import OpenPrs from './components/dialogs/OpenPrs.vue';
 import SendPopover from './components/dialogs/SendPopover.vue';
 import ArtifactStage from './components/layout/ArtifactStage.vue';
 import ChatFab from './components/layout/ChatFab.vue';
@@ -63,7 +62,6 @@ onBeforeUnmount(() => {
     <ChatFab v-if="workspaces.current && !ui.booting && ui.railCollapsed" />
     <WorkspaceDetails v-if="ui.detailsOpen && workspaces.current" />
     <SendPopover v-if="ui.sendOpen && workspaces.current" />
-    <OpenPrs v-if="ui.openPrsOpen" />
     <NewWorkspace v-if="ui.newWorkspaceOpen" />
     <AddAgent v-if="ui.addAgentOpen" />
     <ConnectionLost v-if="ui.offline" />

@@ -54,8 +54,6 @@ export interface AgentService {
   resetHandovers(workspace: WorkspaceId): Promise<void>;
   /** Allow or deny a call the agent's turn is waiting on, or a handover waiting for the user's OK. */
   answerPermission(workspace: WorkspaceId, agent: AgentId, id: string, decision: PermissionDecision): Promise<void>;
-  /** The PRs are open: whoever was ready for review has nothing more to wait for. */
-  settleReviews(workspace: WorkspaceId): Promise<void>;
   /** How tools name agents to each other. Ids mean nothing to a model. */
   namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
   /** How often the end-of-turn checks had to nudge each role, over all workspaces. */
@@ -204,12 +202,6 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
       const row = (await permissions.pendingOf(workspace, agent)).find((request) => request.id === id);
       if (row && isHandoverRow(row)) return handover.answer(workspace, row, decision);
       return sessions.answer(workspace, agent, id, decision);
-    },
-    async settleReviews(workspace) {
-      const found = await store.getWorkspace(workspace);
-      for (const agent of found?.agents ?? []) {
-        if (agent.status === 'review') await records.setStatus(workspace, agent.id, 'idle');
-      }
     },
     async namer(workspace) {
       const members = (await store.getWorkspace(workspace))?.agents ?? [];

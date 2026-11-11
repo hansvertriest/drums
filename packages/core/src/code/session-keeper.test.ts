@@ -86,7 +86,7 @@ describe('pausing code sessions', () => {
   });
 
   it('makes no difference to anything that comes after', async () => {
-    const { services, ws, reviews, endTurn, passGrace, session, code, agent } = await setup();
+    const { services, ws, reviews, endTurn, passGrace, session, agent } = await setup();
     await endTurn();
     await passGrace();
 
@@ -103,10 +103,6 @@ describe('pausing code sessions', () => {
     await endTurn();
     await passGrace();
     expect(reviews()[1]!.stopped).toBe(true);
-    code.state.changes.set(`/workspaces/${ws}/api`, { files: 1, additions: 1, deletions: 0 });
-    expect((await services.prs.open(ws, { title: 'T', repos: [{ name: 'api', body: 'B' }] })).prs).toHaveLength(1);
-    expect(reviews()).toHaveLength(3);
-    expect(code.state.opened[0]!.body).toContain('dyffle:start');
   });
 
   it('pauses a session that was only opened to answer one request', async () => {

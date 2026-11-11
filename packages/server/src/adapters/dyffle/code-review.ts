@@ -1,5 +1,5 @@
 import { InvalidError, type CodeReview, type CodeReviewEventType, type CodeReviewSession } from '@drums/core';
-import { embedSection, LiveSession, markdownReport, type Index } from 'dyffle';
+import { LiveSession, type Index } from 'dyffle';
 import { z } from 'zod';
 import { impactOf } from './impact.js';
 import { pendingReview } from './reviews.js';
@@ -57,11 +57,6 @@ function createSession(session: LiveSession): CodeReviewSession {
     async impact(target) {
       const index = await current();
       return index ? impactOf(index, target) : { status: 'not-found', message: 'The branch has not been indexed yet.' };
-    },
-    async withReport(body) {
-      const index = await current();
-      if (!index) throw new InvalidError('The branch has not been indexed yet.');
-      return embedSection(body, markdownReport(index));
     },
     async stop() {
       session.unannounce();

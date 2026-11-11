@@ -110,17 +110,15 @@ export function createWorkspaceService(deps: WorkspaceServiceDeps): WorkspaceSer
           const { id, goal, title, agents: members, repos, archivedAt } = workspace;
           const last = (await posts.list(id)).filter(isAuthored).at(-1);
           const lastRole = members.find((agent) => agent.id === last?.agent)?.role;
-          const prs = repos.flatMap(({ pr }) => (pr ? [pr] : []));
           const counts = repos.length > 0 ? await code.changes(workspace) : undefined;
           return {
             id,
             goal,
             ...(title ? { title } : {}),
-            status: workspaceStatus(members, prs.length > 0),
+            status: workspaceStatus(members),
             ...(lastRole ? { lastRole } : {}),
             ...(last ? { lastPost: last.seq } : {}),
             ...(counts ? { additions: counts.additions, deletions: counts.deletions } : {}),
-            ...(prs.length > 0 ? { prCount: prs.length, ...(prs.length === 1 ? { pr: prs[0]!.number } : {}) } : {}),
             ...(archivedAt ? { archived: true } : {}),
           };
         }),

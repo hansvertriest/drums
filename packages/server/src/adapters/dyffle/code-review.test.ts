@@ -146,21 +146,6 @@ describe('impact', () => {
   });
 });
 
-describe('the PR report', () => {
-  it('embeds the report between the markers, and replaces it the second time', async () => {
-    const session = await open();
-    writeFile(repo, 'src/math.ts', CHANGED);
-    const once = await session.withReport('My description');
-    expect(once.indexOf('My description')).toBe(0);
-    expect(once).toContain('<!-- dyffle:start -->');
-    expect(once).toContain('<!-- dyffle:end -->');
-    expect(once).toMatch(/signature|changed|add/i);
-    const twice = await session.withReport(`${once}\n\nmore`);
-    expect(twice.match(/<!-- dyffle:start -->/g)).toHaveLength(1);
-    expect(twice).toContain('more');
-  });
-});
-
 describe('reviews', () => {
   const comment = { id: 'c1', path: 'src/math.ts', line: 2, side: 'RIGHT', body: 'Why c?', code: '  return a + b + c;', symbol: 'src/math.ts#add', created: 1 };
   const save = (session: CodeReviewSession, comments: unknown[], body = '', viewed = {}) =>

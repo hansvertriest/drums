@@ -24,7 +24,6 @@ export type { PastedImage } from './images/pasted-images.js';
 export type { EndedTurn, TurnCheck, TurnCheckServices } from './agents/turn-checks/turn-check.js';
 export { createTurnCheckRegistry, turnChecks, type TurnCheckRegistry } from './agents/turn-checks/registry.js';
 export type { CodeService } from './code/code-service.js';
-export type { PrService } from './code/pr-service.js';
 export type { FeedbackService } from './feedback/feedback-service.js';
 export { formatFeedback, type FeedbackGroup } from './feedback/format.js';
 export type { WorkspaceService } from './workspaces/workspace-service.js';

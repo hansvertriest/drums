@@ -1,6 +1,6 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
 import type { RolePicker } from '@drums/core';
 import { MapState, ProjectList, WorkspaceList, WorkspaceState } from '@drums/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -8,28 +8,20 @@ import { main, type RunningDrums } from './main.js';
 import { fakeBackend } from './testing/fake-backend.js';
 import { createTempRepo, runGit, tempDirs, writeFile } from './testing/temp-repo.js';
 
-/** A code workspace through the real HTTP layer, real git and real dyffle. The model and `gh` are fake, and origin is a local bare repo. */
+/** A code workspace through the real HTTP layer, real git and real dyffle. The model is fake. */
 const dirs = tempDirs();
 const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => ({ picks: hasRepos ? [{ role: 'coder', instruction: goal }] : [] }) };
 const fake = fakeBackend();
-const PATH = process.env.PATH;
 const LISTED_NAME = 'box.example';
 const LISTED = `${LISTED_NAME}:8445`;
 let parent: string;
 let drums: RunningDrums;
-let repo: { path: string; origin?: string };
-let ghLog: string;
+let repo: { path: string };
 
 beforeAll(async () => {
   parent = dirs.make('drums-code-');
-  repo = createTempRepo(parent, 'shop', { withOrigin: true });
-  createTempRepo(parent, 'other', { withOrigin: true });
-  ghLog = join(parent, 'gh.log');
-  const bin = join(parent, 'bin');
-  mkdirSync(bin);
-  writeFileSync(join(bin, 'gh'), `#!/bin/sh\nprintf 'ARGS %s\\n' "$*" >> "${ghLog}"\ncat >> "${ghLog}"\nif [ "$1 $2" = "pr create" ]; then n=$(grep -c '^ARGS pr create' "${ghLog}"); echo "https://github.example/o/r/pull/$n"; fi\n`);
-  chmodSync(join(bin, 'gh'), 0o755);
-  process.env.PATH = `${bin}${delimiter}${PATH}`;
+  repo = createTempRepo(parent, 'shop');
+  createTempRepo(parent, 'other');
   process.env.DRUMS_ALLOWED_HOSTS = LISTED_NAME;
   mkdirSync(join(parent, 'home'));
   writeFileSync(join(parent, 'home', 'config.json'), JSON.stringify({ projects: [repo.path, join(parent, 'other'), join(parent, 'not-a-repo')] }));
@@ -40,7 +32,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await drums.stop();
-  process.env.PATH = PATH;
   delete process.env.DRUMS_ALLOWED_HOSTS;
   dirs.cleanup();
 });
@@ -298,49 +289,6 @@ describe('permission route', () => {
     expect((await post(`/api/workspaces/${ws}/agents/${agent}/permissions/p1`, { decision: 'maybe' })).status).toBe(400);
     expect((await post(`/api/workspaces/${ws}/agents/${agent}/permissions/p1`, { decision: 'allow' })).status).toBe(204);
     expect((await post(`/api/workspaces/${ws}/agents/${agent}/permissions/p1`, { decision: 'allow' })).status).toBe(404);
-  });
-});
-
-describe('PRs', () => {
-  it('commits, pushes to the local origin, opens against the stub gh and links them', async () => {
-    const { ws, session, worktree } = await create('Paging across repos', [
-      { name: 'shop', base: 'main' },
-      { name: 'other', base: 'main' },
-    ]);
-    const otherTree = join(parent, 'ws', ws, 'other');
-    writeFile(worktree, 'src/math.ts', CHANGED);
-    writeFile(otherTree, 'src/extra.ts', 'export const extra = 1;\n');
-    // One repo committed by the Coder, the other left for drums to commit when the PRs open.
-    await commit(session, worktree, 'Make add take c');
-    session.emit({ type: 'turn.ended', outcome: 'success' });
-    // drums reminds the Coder of what is uncommitted once, and lets the turn end after that.
-    await until(async () => session.received.at(-1)!.includes('You left changes uncommitted'), 'the reminder to commit');
-    session.emit({ type: 'turn.ended', outcome: 'success' });
-    await turnOver(ws);
-    const drafts = await (await get(`/api/workspaces/${ws}/prs`)).json();
-    expect(drafts.title).toBe('Paging across repos');
-    const response = await post(`/api/workspaces/${ws}/prs`, {
-      title: 'Add paging',
-      repos: [
-        { name: 'shop', body: 'Shop part' },
-        { name: 'other', body: 'Other part' },
-      ],
-    });
-    expect(response.status).toBe(201);
-    const { prs } = await response.json();
-    expect(prs.map((p: { repo: string }) => p.repo)).toEqual(['shop', 'other']);
-
-    const branch = `drums/${ws}`;
-    expect(runGit(repo.origin!, 'log', '-1', '--format=%s', branch).trim()).toBe('Make add take c');
-    expect(runGit(join(parent, 'other-origin.git'), 'log', '-1', '--format=%s', branch).trim()).toBe('Add paging');
-    const log = readFileSync(ghLog, 'utf8');
-    expect(log.match(/ARGS pr create --base main --head \S+ --title Add paging --body-file -/g)!.length).toBeGreaterThanOrEqual(2);
-    expect(log).toContain('Shop part');
-    expect(log).toContain('<!-- dyffle:start -->');
-    expect(log).toContain('<!-- dyffle:end -->');
-    expect(log).toMatch(/ARGS pr edit \d+ --body-file -\nShop part\n\n\*\*Part of the same change:\*\*\n- other: https:\/\/github\.example/);
-    const [summary] = WorkspaceList.parse(await (await get('/api/workspaces')).json()).filter((w) => w.id === ws);
-    expect(summary).toMatchObject({ status: 'pr', prCount: 2 });
   });
 });
 

@@ -5,7 +5,7 @@ import { Focus } from './focus.js';
 import { AgentId, ArtifactKindId, BranchName, RepoName, RoleId, ToolId, VersionNumber } from './ids.js';
 import { PermissionDecision } from './permission.js';
 import { Post, Step } from './post.js';
-import { PullRequest, Workspace, WorkspaceSummary } from './workspace.js';
+import { Workspace, WorkspaceSummary } from './workspace.js';
 
 /** `GET /api/health` */
 export const HealthResponse = z.object({
@@ -116,29 +116,10 @@ export const MapState = z.object({
       error: z.string().optional(),
       /** Comments Send hasn't delivered yet. */
       pendingComments: z.number().int().nonnegative(),
-      pr: PullRequest.optional(),
     }),
   ),
 });
 export type MapState = z.infer<typeof MapState>;
-
-/** `GET /api/workspaces/:ws/prs`: what the Open PRs dialog starts with. */
-export const PrDrafts = z.object({
-  title: z.string(),
-  branch: BranchName.optional(),
-  repos: z.array(z.object({ name: RepoName, base: BranchName, ...Changes, body: z.string(), pr: PullRequest.optional() })),
-});
-export type PrDrafts = z.infer<typeof PrDrafts>;
-
-/** `POST /api/workspaces/:ws/prs`: one per repo, all with this title. */
-export const OpenPrsRequest = z.object({
-  title: z.string().trim().min(1).max(300),
-  repos: z.array(z.object({ name: RepoName, body: z.string().max(100_000) })).min(1).max(20),
-});
-export type OpenPrsRequest = z.infer<typeof OpenPrsRequest>;
-
-export const OpenPrsResponse = z.object({ prs: z.array(z.object({ repo: RepoName, pr: PullRequest })) });
-export type OpenPrsResponse = z.infer<typeof OpenPrsResponse>;
 
 /** `POST /api/workspaces/:ws/agents/:a/permissions/:id` */
 export const AnswerPermissionRequest = z.object({ decision: PermissionDecision });

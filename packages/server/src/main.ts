@@ -1,11 +1,10 @@
-import { createArtifactKindRegistry, createEventBus, createRoleRegistry, createServices, createToolRegistry, createTurnCheckRegistry, type AgentBackend, type CodeReview, type Git, type PullRequests, type RolePicker } from '@drums/core';
+import { createArtifactKindRegistry, createEventBus, createRoleRegistry, createServices, createToolRegistry, createTurnCheckRegistry, type AgentBackend, type CodeReview, type Git, type RolePicker } from '@drums/core';
 import { createClaudeBackend } from './adapters/claude/backend.js';
 import { createClaudeRolePicker } from './adapters/claude/role-picker.js';
 import { createDyffleCodeReview } from './adapters/dyffle/code-review.js';
 import { createFsStore } from './adapters/fs-store/store.js';
 import { createLockfileDependencies } from './adapters/dependencies/lockfile.js';
 import { createExecaGit } from './adapters/git/git.js';
-import { createGhPullRequests } from './adapters/git/github.js';
 import { createSystemClock } from './adapters/system/clock.js';
 import { createConfigProjects } from './adapters/system/config-projects.js';
 import { createUuidIds } from './adapters/system/ids.js';
@@ -23,7 +22,6 @@ export interface DrumsOptions extends ConfigOverrides {
   /** Replaces the model call that picks roles; tests use it so they never reach the model. */
   rolePicker?: RolePicker;
   /** Replaces `gh`; tests use it so they never reach a remote. */
-  pullRequests?: PullRequests;
   /** Replace the adapters on git and dyffle. */
   git?: Git;
   codeReview?: CodeReview;
@@ -41,7 +39,7 @@ const FIRST_ROLE = 'scoper';
 
 /** The composition root: the one place that builds adapters, registries and services. */
 export async function main(options: DrumsOptions): Promise<RunningDrums> {
-  const { port, host = DEFAULT_HOST, webRoot, agentBackend, rolePicker, pullRequests, git, codeReview, ...overrides } = options;
+  const { port, host = DEFAULT_HOST, webRoot, agentBackend, rolePicker, git, codeReview, ...overrides } = options;
   const config = loadConfig(overrides);
   const clock = createSystemClock();
   const ids = createUuidIds();
@@ -66,7 +64,6 @@ export async function main(options: DrumsOptions): Promise<RunningDrums> {
     rolePicker: rolePicker ?? createClaudeRolePicker({ model: config.models.rolePicker, apiKey: process.env.ANTHROPIC_API_KEY }),
     git: git ?? createExecaGit(),
     dependencies: createLockfileDependencies(),
-    pullRequests: pullRequests ?? createGhPullRequests(),
     projects: createConfigProjects(config.projects),
     codeReview: codeReview ?? createDyffleCodeReview({ baseCacheDir: config.baseCacheDir }),
     viewerUrl: (workspace, repo) => `${origin}/map/${mapToken}/${workspace}/${repo}/`,

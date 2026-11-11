@@ -37,8 +37,8 @@ export function writeFile(root: string, path: string, text: string) {
   writeFileSync(join(root, path), text);
 }
 
-/** A real repo on `main` with one small TypeScript file. With `withOrigin`, a local bare repo is its `origin`. */
-export function createTempRepo(parent: string, name = 'repo', { withOrigin = false } = {}) {
+/** A real repo on `main` with one small TypeScript file. */
+export function createTempRepo(parent: string, name = 'repo') {
   const path = join(parent, name);
   mkdirSync(path, { recursive: true });
   runGit(path, 'init', '-b', 'main');
@@ -48,10 +48,5 @@ export function createTempRepo(parent: string, name = 'repo', { withOrigin = fal
   writeFile(path, 'tsconfig.json', '{ "compilerOptions": { "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext" } }\n');
   runGit(path, 'add', '.');
   runGit(path, 'commit', '-m', 'init');
-  if (!withOrigin) return { path };
-  const origin = join(parent, `${name}-origin.git`);
-  runGit(parent, 'init', '--bare', '-b', 'main', origin);
-  runGit(path, 'remote', 'add', 'origin', origin);
-  runGit(path, 'push', 'origin', 'main');
-  return { path, origin };
+  return { path };
 }

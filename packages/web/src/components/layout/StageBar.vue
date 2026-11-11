@@ -3,20 +3,17 @@ import { computed } from 'vue';
 import { useWorkspaceSummary } from '../../composables/useWorkspaceSummary';
 import { rendererFor } from '../../renderers';
 import { useArtifacts } from '../../stores/artifacts';
-import { useMap } from '../../stores/map';
 import { useUi } from '../../stores/ui';
 import { useWorkspaces } from '../../stores/workspaces';
 import ArtifactTabs from '../artifacts/ArtifactTabs.vue';
 import ChangesSwitch from '../artifacts/ChangesSwitch.vue';
 import StatusDot from '../shared/StatusDot.vue';
-import PrLinks from './PrLinks.vue';
 import SendButton from './SendButton.vue';
 
 const workspaces = useWorkspaces();
 const artifacts = useArtifacts();
-const map = useMap();
 const ui = useUi();
-const { name, status, openPrsLabel } = useWorkspaceSummary();
+const { name, status } = useWorkspaceSummary();
 
 const hasArtifacts = computed(() => artifacts.artifacts.length > 0);
 const showsChanges = computed(() => artifacts.current !== undefined && !rendererFor(artifacts.current.renderer)?.ownVersions);
@@ -30,10 +27,6 @@ const showsChanges = computed(() => artifacts.current !== undefined && !renderer
     <ArtifactTabs v-if="hasArtifacts" />
     <div class="actions">
       <ChangesSwitch v-if="showsChanges" />
-      <PrLinks v-if="map.opened.length > 0" class="pr-links" />
-      <button v-if="map.changed.length > 0" class="action-button" type="button" @click="ui.openPrsOpen = true">
-        {{ openPrsLabel }}
-      </button>
       <SendButton />
     </div>
   </header>
@@ -74,10 +67,7 @@ const showsChanges = computed(() => artifacts.current !== undefined && !renderer
   gap: 6px;
   margin-left: auto;
 }
-.pr-links {
-  margin: 0 6px;
-}
-/* Phones: only the artifact chips. Send and Open PR live in the top bar and the details sheet. */
+/* Phones: only the artifact chips. Send lives in the top bar. */
 @media (max-width: 900px) {
   .stage-bar {
     height: 42px;

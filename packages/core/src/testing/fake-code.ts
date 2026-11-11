@@ -2,7 +2,6 @@ import type { CodeReview, CodeReviewEventType, CodeReviewSession, ImpactResult, 
 import type { Dependencies } from '../ports/dependencies.js';
 import type { BranchChanges, Git, WorktreeRequest } from '../ports/git.js';
 import type { Project, Projects } from '../ports/projects.js';
-import type { PullRequests } from '../ports/pull-requests.js';
 
 export interface FakeReviewSession extends CodeReviewSession {
   request: OpenSessionRequest;
@@ -17,10 +16,6 @@ export function createFakeCode() {
     worktrees: [] as WorktreeRequest[],
     removed: [] as string[],
     installs: [] as string[],
-    pushes: [] as Array<{ worktree: string; branch: string }>,
-    commits: [] as Array<{ worktree: string; message: string }>,
-    opened: [] as Array<{ worktree: string; base: string; head: string; title: string; body: string; number: number }>,
-    edits: [] as Array<{ worktree: string; number: number; body: string }>,
     sessions: [] as FakeReviewSession[],
     /** Per worktree. */
     changes: new Map<string, BranchChanges>(),
@@ -31,7 +26,6 @@ export function createFakeCode() {
     failAdd: undefined as string | undefined,
     failOpen: undefined as string | undefined,
     failInstall: undefined as string | undefined,
-    failPr: undefined as string | undefined,
   };
 
   const git: Git = {
@@ -44,12 +38,6 @@ export function createFakeCode() {
     branches: async (repo) => ({ names: ['dev', 'main'], current: repo.endsWith('web') ? 'dev' : 'main' }),
     changes: async (worktree) => state.changes.get(worktree) ?? { files: 1, additions: 2, deletions: 1 },
     hasUncommitted: async (worktree) => state.uncommitted.has(worktree),
-    commitAll: async (worktree, message) => {
-      state.commits.push({ worktree, message });
-      state.uncommitted.delete(worktree);
-      return true;
-    },
-    push: async (worktree, branch) => void state.pushes.push({ worktree, branch }),
   };
 
   const dependencies: Dependencies = {
@@ -57,16 +45,6 @@ export function createFakeCode() {
       if (state.failInstall && worktree.endsWith(state.failInstall)) throw new Error('npm is not installed');
       state.installs.push(worktree);
     },
-  };
-
-  const pullRequests: PullRequests = {
-    async open({ worktree, base, head, title, body }) {
-      if (state.failPr && worktree.endsWith(state.failPr)) throw new Error(`gh: refused ${state.failPr}`);
-      const number = state.opened.length + 1;
-      state.opened.push({ worktree, base, head, title, body, number });
-      return { number, url: `https://example.test/pull/${number}` };
-    },
-    editBody: async (edit) => void state.edits.push(edit),
   };
 
   const projects: Projects = { list: () => state.projectList };
@@ -92,7 +70,6 @@ export function createFakeCode() {
           return () => listeners.delete(listener);
         },
         impact: async () => state.impact,
-        withReport: async (body) => `${body}\n<!-- dyffle:start -->\nreport\n<!-- dyffle:end -->`,
         async stop() {
           session.stopped = true;
         },
@@ -111,5 +88,5 @@ export function createFakeCode() {
     },
   };
 
-  return { ...state, state, git, dependencies, pullRequests, projects, codeReview };
+  return { ...state, state, git, dependencies, projects, codeReview };
 }

@@ -26,7 +26,7 @@ State lives in files, per spec §8. These environment variables move it; use the
 | `DRUMS_ALLOWED_HOSTS` | none | comma-separated hostnames, without port, that a proxy such as `tailscale serve` reaches the server by; they get the API and map, and `X-Forwarded-Proto` is believed for them only |
 | `ANTHROPIC_API_KEY` | none | with a key, roles are picked over the Anthropic API; without one, on the machine's Claude Code login |
 
-To attach repos to workspaces, list them in `config.json`: `{ "projects": ["/path/to/repo"] }`. A repo's folder name is what you see. Workspaces get a worktree of each repo, and base indexes are shared in `<home>/dyffle-base`. `gh` on `PATH` opens the PRs, with its own login.
+To attach repos to workspaces, list them in `config.json`: `{ "projects": ["/path/to/repo"] }`. A repo's folder name is what you see. Workspaces get a worktree of each repo, and base indexes are shared in `<home>/dyffle-base`.
 
 Agents use the machine's existing Claude Code login. The server binds to `127.0.0.1`; there is no auth.
 

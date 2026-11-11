@@ -51,7 +51,7 @@ describe('changes left uncommitted', () => {
     await endTurn(session);
     await endTurn(session);
     expect(session.received.filter((text) => NUDGE.test(text))).toHaveLength(1);
-    expect(code.state.commits).toEqual([]);
+    expect(code.state.uncommitted.size).toBe(1);
     expect(await status()).toBe('review');
     // A new turn with the changes still there gets one nudge again.
     await services.agents.send(ws, agent.id, 'and now?');
@@ -85,14 +85,13 @@ describe('an artifact file written without artifact_update', () => {
   const write = (session: FakeSession, path: string) => session.emit({ type: 'step', tool: 'Write', summary: path, writes: [path] });
 
   it('nudges for HTML outside the repos, once, and does nothing more', async () => {
-    const { session, status, code } = await setup();
+    const { session, status } = await setup();
     write(session, 'scope.html');
     await endTurn(session);
     expect(session.received.at(-1)).toMatch(/^<drums-system>\nYou wrote an HTML file/);
     await endTurn(session);
     expect(await status()).toBe('review');
     expect(session.received.filter((text) => text.startsWith('<drums-system>'))).toHaveLength(1);
-    expect(code.state.commits).toEqual([]);
   });
 
   it('takes HTML in a repo for code, and other files for nothing', async () => {

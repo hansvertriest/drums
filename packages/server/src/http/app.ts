@@ -15,7 +15,6 @@ import { messageRoutes } from './routes/messages.js';
 import { nudgeRoutes } from './routes/nudges.js';
 import { permissionRoutes } from './routes/permissions.js';
 import { projectRoutes } from './routes/projects.js';
-import { prRoutes } from './routes/prs.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { streamRoutes } from './stream.js';
 
@@ -34,7 +33,6 @@ const routeGroups: readonly RouteGroup[] = [
   projectRoutes,
   mapRoutes,
   mapViewerRoutes,
-  prRoutes,
   nudgeRoutes,
 ];
 

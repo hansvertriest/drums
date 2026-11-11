@@ -31,7 +31,7 @@ describe('WorkspaceService', () => {
     expect(posts).toMatchObject([{ kind: 'message', text: 'Scope checkout' }]);
   });
 
-  it('keeps the title the picker made, for the list and the PR, and goes without one if it made none', async () => {
+  it('keeps the title the picker made, for the list, and goes without one if it made none', async () => {
     const { services, picker } = createHarness();
     picker.title = '  Checkout scope ';
     const titled = await services.workspaces.create({ goal: 'Scope checkout, with all the details' });

@@ -4,7 +4,6 @@ import { AnswerSet, Artifact } from './artifact.js';
 import { AgentId, ArtifactId, RepoName, VersionNumber, WorkspaceId } from './ids.js';
 import { PermissionRequest } from './permission.js';
 import { Post, Step } from './post.js';
-import { PullRequest } from './workspace.js';
 
 export const AgentAddedEvent = z.object({
   type: z.literal('agent.added'),
@@ -82,13 +81,6 @@ export const MapChangedEvent = z.object({
 });
 export type MapChangedEvent = z.infer<typeof MapChangedEvent>;
 
-export const PrsOpenedEvent = z.object({
-  type: z.literal('prs.opened'),
-  workspace: WorkspaceId,
-  prs: z.array(z.object({ repo: RepoName, pr: PullRequest })),
-});
-export type PrsOpenedEvent = z.infer<typeof PrsOpenedEvent>;
-
 /** Everything `core` announces. Add a member here to add an event. */
 export const DomainEvent = z.discriminatedUnion('type', [
   AgentAddedEvent,
@@ -101,7 +93,6 @@ export const DomainEvent = z.discriminatedUnion('type', [
   AnswersChangedEvent,
   PermissionChangedEvent,
   MapChangedEvent,
-  PrsOpenedEvent,
 ]);
 export type DomainEvent = z.infer<typeof DomainEvent>;
 

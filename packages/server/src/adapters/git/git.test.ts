@@ -8,11 +8,10 @@ const dirs = tempDirs();
 const git = createExecaGit();
 let parent: string;
 let repo: string;
-let origin: string;
 
 beforeEach(() => {
   parent = dirs.make('drums-git-');
-  ({ path: repo, origin } = createTempRepo(parent, 'repo', { withOrigin: true }) as { path: string; origin: string });
+  ({ path: repo } = createTempRepo(parent, 'repo'));
 });
 afterEach(() => dirs.cleanup());
 
@@ -75,38 +74,11 @@ describe('changes', () => {
   });
 });
 
-describe('commit and push', () => {
-  beforeEach(() => git.addWorktree({ repo, path: worktree(), branch: 'drums/x', base: 'main' }));
-
-  it('commits what is uncommitted, untracked included, or says there was nothing', async () => {
-    expect(await git.commitAll(worktree(), 'nothing')).toBe(false);
-    writeFile(worktree(), 'new.ts', 'x\n');
-    expect(await git.commitAll(worktree(), 'Add it')).toBe(true);
-    expect(runGit(worktree(), 'log', '-1', '--format=%s').trim()).toBe('Add it');
-    expect(runGit(worktree(), 'status', '--porcelain').trim()).toBe('');
-  });
-
-  it('pushes the branch to origin, a local bare repo here', async () => {
-    writeFile(worktree(), 'new.ts', 'x\n');
-    await git.commitAll(worktree(), 'Add it');
-    await git.push(worktree(), 'drums/x');
-    expect(runGit(origin, 'log', '-1', '--format=%s', 'drums/x').trim()).toBe('Add it');
-    expect(runGit(origin, 'branch', '--list', 'main').trim()).toContain('main');
-  });
-
-  it('refuses a push that is not a fast-forward instead of forcing it', async () => {
-    writeFile(worktree(), 'a.ts', 'x\n');
-    await git.commitAll(worktree(), 'one');
-    await git.push(worktree(), 'drums/x');
-    runGit(worktree(), 'reset', '--hard', 'main');
-    writeFile(worktree(), 'b.ts', 'x\n');
-    await git.commitAll(worktree(), 'two');
-    await expect(git.push(worktree(), 'drums/x')).rejects.toMatchObject({ name: 'ConflictError' });
-    expect(runGit(origin, 'log', '-1', '--format=%s', 'drums/x').trim()).toBe('one');
-  });
-});
-
 describe('hasUncommitted', () => {
+  const commit = (message: string) => {
+    runGit(worktree(), 'add', '-A');
+    runGit(worktree(), 'commit', '-qm', message);
+  };
   const add = () => git.addWorktree({ repo, path: worktree(), branch: 'drums/x', base: 'main' });
 
   it('sees new, changed, deleted and staged files, and nothing once they are committed', async () => {
@@ -114,7 +86,7 @@ describe('hasUncommitted', () => {
     expect(await git.hasUncommitted(worktree())).toBe(false);
     writeFile(worktree(), 'new.ts', 'x\n');
     expect(await git.hasUncommitted(worktree())).toBe(true);
-    await git.commitAll(worktree(), 'one');
+    commit('one');
     expect(await git.hasUncommitted(worktree())).toBe(false);
     writeFile(worktree(), 'src/math.ts', 'changed\n');
     expect(await git.hasUncommitted(worktree())).toBe(true);
@@ -127,7 +99,7 @@ describe('hasUncommitted', () => {
   it('ignores what git ignores', async () => {
     await add();
     writeFile(worktree(), '.gitignore', 'built/\n');
-    await git.commitAll(worktree(), 'ignore built');
+    commit('ignore built');
     writeFile(worktree(), 'built/x.js', 'x\n');
     expect(await git.hasUncommitted(worktree())).toBe(false);
   });

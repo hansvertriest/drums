@@ -1,5 +1,5 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { RolePicker } from '@drums/core';
 import { MapState, WorkspaceState } from '@drums/protocol';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -7,30 +7,22 @@ import { main, type RunningDrums } from './main.js';
 import { fakeBackend } from './testing/fake-backend.js';
 import { createTempRepo, runGit, tempDirs, writeFile } from './testing/temp-repo.js';
 
-/** Pausing and restarting through real HTTP, real git and real dyffle. The model and `gh` are fake, and origin is a local bare repo. */
+/** Pausing and restarting through real HTTP, real git and real dyffle. The model is fake. */
 /** Well past what setting up a workspace takes on a busy machine: nothing may pause in between. */
 const GRACE_MS = 500;
 vi.setConfig({ testTimeout: 60_000 });
 const dirs = tempDirs();
 const fake = fakeBackend();
 const pickCoder: RolePicker = { pick: async ({ goal, hasRepos }) => ({ picks: hasRepos ? [{ role: 'coder', instruction: goal }] : [] }) };
-const PATH = process.env.PATH;
 let parent: string;
 let drums: RunningDrums;
-let ghLog: string;
 
 const start = () =>
   main({ port: 0, webRoot: join(parent, 'web'), home: join(parent, 'home'), workspacesRoot: join(parent, 'ws'), agentBackend: fake.backend, rolePicker: pickCoder, sessionGraceMs: GRACE_MS });
 
 beforeAll(async () => {
   parent = dirs.make('drums-pause-');
-  const repo = createTempRepo(parent, 'shop', { withOrigin: true });
-  ghLog = join(parent, 'gh.log');
-  const bin = join(parent, 'bin');
-  mkdirSync(bin);
-  writeFileSync(join(bin, 'gh'), `#!/bin/sh\ncat >> "${ghLog}"\nif [ "$1 $2" = "pr create" ]; then echo "https://github.example/o/r/pull/7"; fi\n`);
-  chmodSync(join(bin, 'gh'), 0o755);
-  process.env.PATH = `${bin}${delimiter}${PATH}`;
+  const repo = createTempRepo(parent, 'shop');
   mkdirSync(join(parent, 'home'));
   writeFileSync(join(parent, 'home', 'config.json'), JSON.stringify({ projects: [repo.path] }));
   mkdirSync(join(parent, 'web'));
@@ -40,7 +32,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await drums.stop();
-  process.env.PATH = PATH;
   dirs.cleanup();
 });
 
@@ -115,8 +106,8 @@ describe('pausing', () => {
     await paused(worktree);
   });
 
-  it('makes no difference to the map, commits, comments or PRs', async () => {
-    const { ws, session, agent, worktree } = await create('Paused work');
+  it('makes no difference to the map, commits or comments', async () => {
+    const { ws, session, worktree } = await create('Paused work');
     writeFile(worktree, 'src/math.ts', CHANGED);
     const before = await commit(session, worktree, 'Before');
     await pause(worktree, session);
@@ -149,14 +140,6 @@ describe('pausing', () => {
     writeFile(worktree, 'src/more.ts', 'export const more = 1;\n');
     await commit(session, worktree, 'After');
     expect(await titles(url)).toEqual(['Whole branch', 'Before', 'After', 'Uncommitted changes']);
-    await pause(worktree, session);
-
-    // A PR, with the branch's report in it.
-    const opened = await post(`/api/workspaces/${ws}/prs`, { title: 'Paged', repos: [{ name: 'shop', body: 'Body' }] });
-    expect(opened.status).toBe(201);
-    expect(readFileSync(ghLog, 'utf8')).toContain('dyffle:start');
-    expect(runGit(worktree, 'status', '--porcelain', '--', 'src').trim()).toBe('');
-    expect(agent).toBeTruthy();
   });
 
   it('shows a failed resume, keeps the agent usable, and works again once it can', async () => {

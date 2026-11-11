@@ -5,6 +5,5 @@ export type * from './dependencies.js';
 export type * from './git.js';
 export type * from './ids.js';
 export type * from './projects.js';
-export type * from './pull-requests.js';
 export type * from './role-picker.js';
 export type * from './store.js';
