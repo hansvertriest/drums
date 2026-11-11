@@ -56,7 +56,7 @@ describe('when a handover fires', () => {
 
   it('survives a nudge and waits for the turn that answers it', async () => {
     const { sender, code, ws, backend } = await setup(REPOS, 'coder');
-    code.state.contents.set(`/workspaces/${ws}/api`, 'edited');
+    code.state.uncommitted.add(`/workspaces/${ws}/api`);
     await handOver(sender, 'reviewer');
     await endTurn(sender);
     expect(sender.received.at(-1)).toContain('<drums-system>');
@@ -105,7 +105,7 @@ describe('what cancels it', () => {
 
   it('request_input, also in the turn after a nudge', async () => {
     const { sender, code, ws, backend, agent } = await setup(REPOS, 'coder');
-    code.state.contents.set(`/workspaces/${ws}/api`, 'edited');
+    code.state.uncommitted.add(`/workspaces/${ws}/api`);
     await handOver(sender, 'reviewer');
     await endTurn(sender);
     expect(sender.received.at(-1)).toContain('<drums-system>');

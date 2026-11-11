@@ -21,8 +21,6 @@ export const WorkspaceRepo = z.object({
   prBody: z.string().optional(),
   /** Marks of the review comments Send already delivered, so they go once. */
   delivered: z.array(z.string()).default([]),
-  /** Identifies the worktree's content at the last checkpoint: what "changed since" is measured from. */
-  checkpointed: z.string().optional(),
 });
 export type WorkspaceRepo = z.infer<typeof WorkspaceRepo>;
 

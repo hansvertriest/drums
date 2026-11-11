@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createHarness, settle } from '../testing/harness.js';
+import { createHarness } from '../testing/harness.js';
 
 const repos = [
   { name: 'api', base: 'main' },
@@ -27,7 +27,7 @@ describe('attaching repos', () => {
     expect(sessions[0]!.request.viewerUrl).toBe(`http://drums/map/${ws}/api/`);
   });
 
-  it('starts a role that needs a repo, chosen by data, and shows the map before any checkpoint', async () => {
+  it('starts a role that needs a repo, chosen by data, and shows the map, which has no versions of its own', async () => {
     const { state, harness } = await codeWorkspace();
     expect(state.workspace.agents.map((a) => a.role)).toEqual(['coder']);
     expect(harness.backend.last().options.access).toBe('shell-and-files');
@@ -108,8 +108,8 @@ describe('attaching repos', () => {
 describe('sessions', () => {
   it('forwards session events as domain events', async () => {
     const { harness, ws } = await codeWorkspace();
-    harness.code.state.sessions[1]!.emit('feed');
-    expect(harness.seen).toContainEqual({ type: 'map.changed', workspace: ws, repo: 'web', aspect: 'feed' });
+    harness.code.state.sessions[1]!.emit('views');
+    expect(harness.seen).toContainEqual({ type: 'map.changed', workspace: ws, repo: 'web', aspect: 'views' });
   });
 
   it('resumes a stopped session with a new one on the next request', async () => {
@@ -130,75 +130,30 @@ describe('sessions', () => {
   });
 });
 
-describe('checkpoint through its tool', () => {
-  it('posts to each repo and makes one version of the branch map, attributed', async () => {
+describe('uncommitted changes', () => {
+  it('holds when any repo has uncommitted changes, and not once they are committed', async () => {
     const { harness, ws } = await codeWorkspace();
-    const result = await harness.backend.last().tool('checkpoint', { title: 'Paging', message: 'Adds `list`' });
-    expect(JSON.parse(result.text)).toMatchObject({ version: 1, repos: [{ name: 'api' }, { name: 'web' }] });
-    expect(harness.code.state.sessions.map((s) => s.posts)).toEqual([
-      [{ title: 'Paging', message: 'Adds `list`', author: 'Coder' }],
-      [{ title: 'Paging', message: 'Adds `list`', author: 'Coder' }],
-    ]);
-    const { posts, artifacts } = await harness.services.workspaces.state(ws);
-    const post = posts.find((p) => p.kind === 'checkpoint');
-    expect(post).toMatchObject({ title: 'Paging', version: 1, artifact: artifacts[0]!.id });
-    expect(artifacts[0]!.versions.map((v) => v.note)).toEqual(['Paging']);
-    const content = await harness.services.artifacts.read(ws, artifacts[0]!.id);
-    expect(JSON.parse(content.content).repos[0]).toMatchObject({ name: 'api', post: 1 });
+    expect(await harness.services.code.uncommitted(ws)).toBe(false);
+    harness.code.state.uncommitted.add(`/workspaces/${ws}/web`);
+    expect(await harness.services.code.uncommitted(ws)).toBe(true);
+    harness.code.state.uncommitted.delete(`/workspaces/${ws}/web`);
+    expect(await harness.services.code.uncommitted(ws)).toBe(false);
   });
 
-  it('makes no version when nothing changed', async () => {
+  it('needs no running session', async () => {
     const { harness, ws } = await codeWorkspace();
-    harness.code.state.change = { post: 1 };
-    const result = await harness.backend.last().tool('checkpoint', { title: 'Nothing', message: 'x' });
-    expect(JSON.parse(result.text).note).toMatch(/Nothing changed/);
-    const { artifacts, posts } = await harness.services.workspaces.state(ws);
-    expect(artifacts[0]!.versions).toEqual([]);
-    expect(posts.some((p) => p.kind === 'checkpoint')).toBe(false);
+    await harness.services.close();
+    harness.code.state.uncommitted.add(`/workspaces/${ws}/api`);
+    expect(await harness.services.code.uncommitted(ws)).toBe(true);
+    expect(harness.code.state.sessions).toHaveLength(2);
   });
+});
 
-  it('only lists the repos that changed in the version', async () => {
-    const { harness, ws } = await codeWorkspace();
-    const [api] = harness.code.state.sessions;
-    const original = api!.checkpoint;
-    api!.checkpoint = async (input) => ({ post: (await original(input)).post });
-    const result = JSON.parse((await harness.backend.last().tool('checkpoint', { title: 'T', message: 'm' })).text);
-    expect(result.repos.map((r: { name: string }) => r.name)).toEqual(['web']);
-    const post = (await harness.services.workspaces.state(ws)).posts.find((p) => p.kind === 'checkpoint');
-    expect(post).toMatchObject({ repos: [{ name: 'web' }] });
-  });
-
-  it('says which repo failed and keeps the rest', async () => {
-    const { harness } = await codeWorkspace();
-    harness.code.state.sessions[0]!.checkpoint = async () => {
-      throw new Error('git broke');
-    };
-    const result = JSON.parse((await harness.backend.last().tool('checkpoint', { title: 'T', message: 'm' })).text);
-    expect(result.version).toBe(1);
-    expect(result.failed).toEqual([{ repo: 'api', error: 'git broke' }]);
-  });
-
-  it('refuses in a workspace with no repos, in words the agent can use', async () => {
-    const harness = createHarness();
-    const { workspace } = await harness.services.workspaces.create({ goal: 'scope it' });
-    const refused = await harness.services.code.checkpoint(workspace.id, workspace.agents[0]!.id, { title: 'T', message: 'm' }).catch((e: Error) => e.message);
-    expect(refused).toMatch(/no repos/);
-  });
-
+describe('the branch map', () => {
   it('can not be written to with artifact_update', async () => {
     const { harness, state } = await codeWorkspace();
     const result = await harness.backend.last().tool('artifact_update', { id: state.artifacts[0]!.id, base_version: 1, html: '{"repos":[]}', note: 'x' });
-    expect(result).toMatchObject({ isError: true, text: expect.stringMatching(/checkpoint/) });
-  });
-
-  it('shows in feed for the other agents', async () => {
-    const { harness, ws } = await codeWorkspace();
-    await harness.backend.last().tool('checkpoint', { title: 'Paging', message: 'm' });
-    await settle();
-    const other = await harness.services.agents.start(ws, 'reviewer', 'review');
-    const feed = JSON.parse((await harness.backend.last().tool('feed', {})).text);
-    expect(feed.posts.map((p: { title: string }) => p.title)).toContain('Paging');
-    expect(other.role).toBe('reviewer');
+    expect(result).toMatchObject({ isError: true, text: expect.stringMatching(/commit/) });
   });
 });
 
@@ -236,15 +191,14 @@ describe('impact through its tool', () => {
 });
 
 describe('the role', () => {
-  it('carries the work loop, and the tool the checkpoint wording of the spec', async () => {
+  it('carries the work loop: test, impact, commit', async () => {
     const { harness } = await codeWorkspace();
     const { options } = harness.backend.last();
     expect(options.prompt).toMatch(/Run the tests/);
     expect(options.prompt).toMatch(/Call impact/);
-    expect(options.prompt).toMatch(/Call checkpoint/);
-    expect(options.prompt).toMatch(/End every turn with a checkpoint or a request_input/);
-    const checkpoint = options.tools.find((t) => t.id === 'checkpoint')!;
-    expect(checkpoint.description).toContain('Call it after each coherent step (a feature step, a fix, a refactor) once the\ntests you ran pass');
+    expect(options.prompt).toMatch(/Commit, in each repo you changed/);
+    expect(options.prompt).toMatch(/End every turn with your changes committed, or with a request_input/);
+    expect(options.tools.map((t) => t.id)).not.toContain('checkpoint');
   });
 
   it('is only picked with repos attached', async () => {

@@ -73,12 +73,12 @@ export const PermissionChangedEvent = z.object({
 });
 export type PermissionChangedEvent = z.infer<typeof PermissionChangedEvent>;
 
-/** Something changed in a repo's dyffle session: the branch, the feed, a build, or a review. */
+/** Something changed in a repo's dyffle session: a dyffle (the branch, a commit, the uncommitted changes), a build, or a review. */
 export const MapChangedEvent = z.object({
   type: z.literal('map.changed'),
   workspace: WorkspaceId,
   repo: RepoName,
-  aspect: z.enum(['live', 'feed', 'status', 'review']),
+  aspect: z.enum(['views', 'status', 'review']),
 });
 export type MapChangedEvent = z.infer<typeof MapChangedEvent>;
 

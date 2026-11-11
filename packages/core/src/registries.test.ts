@@ -25,13 +25,14 @@ describe('built-in registries', () => {
     }
   });
 
-  it('hold the roles, all with a shell, and only the one that needs a repo checkpoints', () => {
+  it('hold the roles, all with a shell, and only the one that needs a repo asks for impact', () => {
     const registry = createRoleRegistry();
     expect(registry.list().map((role) => role.id)).toEqual(['scoper', 'researcher', 'designer', 'coder', 'reviewer']);
     const [coders, others] = [registry.list().filter((role) => role.needsRepo), registry.list().filter((role) => !role.needsRepo)];
     expect(coders.map((role) => role.id)).toEqual(['coder']);
     expect(registry.list().every((role) => role.access === 'shell-and-files')).toBe(true);
-    expect(coders[0]!.tools).toEqual(expect.arrayContaining(['checkpoint', 'impact']));
+    expect(coders[0]!.tools).toEqual(expect.arrayContaining(['impact']));
+    expect(coders[0]!.tools).not.toContain('checkpoint');
     for (const role of others) {
       expect(role.tools).toEqual(['post', 'artifact_list', 'artifact_read', 'artifact_create', 'artifact_update', 'request_input', 'handover', 'feed']);
       expect(role.prompt).toContain('read and search the code');

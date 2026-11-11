@@ -34,8 +34,6 @@ Agents use the machine's existing Claude Code login. The server binds to `127.0.
 
 The `drums` command itself lands in `node_modules/.bin` only if `packages/cli/dist` exists during an install, so on a fresh clone run `npm install` once more after the first build to use `npx drums`.
 
-## The dyffle link
+## dyffle
 
-dyffle comes from `npm link dyffle` (the global link points at `../dyff`), not from the registry. It is deliberately not listed in any `package.json`, because npm would then replace the link with the published package.
-
-npm removes the link on any install that changes the tree, including `npm install <pkg>`, which runs no root scripts. So `scripts/link-dyffle.mjs` puts it back: as `postinstall`, and before `build`, `typecheck`, `test` and `drums`. To restore it by hand, run `npm run link:dyffle`. Only `packages/server/src/adapters/dyffle` may import it.
+dyffle is an ordinary dependency of `packages/server`, from the npm registry (`dyffle@^0.8.0`). Only `packages/server/src/adapters/dyffle` may import it. To try a local dyffle checkout, run `npm link dyffle` after `npm link` in that checkout; the next `npm install` puts the published package back.

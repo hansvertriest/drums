@@ -96,10 +96,9 @@ describe('pausing code sessions', () => {
     expect(reviews()).toHaveLength(1);
 
     await services.agents.send(ws, agent, 'carry on');
-    expect(JSON.parse((await session.tool('checkpoint', { title: 'After', message: 'm' })).text)).toMatchObject({ version: 1 });
+    expect((await session.tool('impact', {})).text).toBe('## impact');
     expect(reviews()).toHaveLength(2);
     expect(reviews()[1]!.request).toEqual(reviews()[0]!.request);
-    expect(reviews()[1]!.posts).toMatchObject([{ title: 'After' }]);
 
     await endTurn();
     await passGrace();
@@ -135,14 +134,13 @@ describe('pausing code sessions', () => {
     expect(reviews()[1]!.stopped).toBe(false);
   });
 
-  it('a checkpoint in a failed resume says so to the agent, and the agent stays usable', async () => {
+  it('an impact in a failed resume says so to the agent, and the agent stays usable', async () => {
     const { services, ws, code, session, endTurn, passGrace, agent } = await setup();
     await endTurn();
     await passGrace();
     code.state.failOpen = 'api';
     await services.agents.send(ws, agent, 'carry on');
-    const result = await session.tool('checkpoint', { title: 'x', message: 'y' });
-    expect(result).toMatchObject({ isError: true });
+    const result = await session.tool('impact', {});
     expect(result.text).toMatch(/could not start/);
   });
 

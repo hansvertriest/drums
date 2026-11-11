@@ -16,7 +16,7 @@ export interface ToolServices {
     /** Agent ids mean nothing to another agent: this is how a tool names them. */
     namer(workspace: WorkspaceId): Promise<(agent: AgentId) => string>;
   };
-  code: Pick<CodeService, 'checkpoint' | 'impact'>;
+  code: Pick<CodeService, 'impact'>;
 }
 
 /** Knows the calling agent, so attribution is automatic. */

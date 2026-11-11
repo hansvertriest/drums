@@ -15,16 +15,10 @@
     "packages/cli"
   ],
   "scripts": {
-    "postinstall": "node scripts/link-dyffle.mjs",
-    "link:dyffle": "node scripts/link-dyffle.mjs",
-    "prebuild": "npm run -s link:dyffle",
     "build": "tsc -b tsconfig.build.json && npm run build -w @drums/web",
-    "pretypecheck": "npm run -s link:dyffle",
     "typecheck": "tsc -b tsconfig.build.json && vue-tsc --noEmit -p packages/web/tsconfig.json && vue-tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "pretest": "npm run -s link:dyffle",
     "test": "vitest run",
-    "predrums": "npm run -s link:dyffle",
     "drums": "node packages/cli/dist/main.js"
   },
   "devDependencies": {

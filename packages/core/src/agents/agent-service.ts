@@ -80,7 +80,7 @@ export interface AgentServiceDeps {
   artifacts: ArtifactService;
   rolePicker: RolePicker;
   turnChecks: TurnCheckRegistry;
-  /** Supplied lazily: `checkpoint` names its author through this service. */
+  /** Supplied lazily: the code service is made after this one. */
   code: () => CodeService;
   /** What Add agent falls back on when the picker returns nothing usable. */
   firstRole: RoleId;
@@ -118,7 +118,6 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
     },
   });
   const lazyCode: ToolServices['code'] = {
-    checkpoint: (...args) => deps.code().checkpoint(...args),
     impact: (...args) => deps.code().impact(...args),
   };
   const overview = (workspace: WorkspaceId, reader?: AgentId) =>

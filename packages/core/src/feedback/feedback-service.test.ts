@@ -306,13 +306,15 @@ describe('code comments', () => {
     expect(coder.received.at(-1)).toBe('<drums-feedback repo="api">\n## Whole branch (live)\n\n- **a.ts:1**\n  Fix this\n</drums-feedback>');
   });
 
-  it('go to the agent that posted the last checkpoint', async () => {
+  it('go to the first open agent that works on repos', async () => {
     const { harness, ws, coder, end, pend } = await codeSetup();
     await end();
+    const first = (await harness.store.getWorkspace(ws))!.agents[0]!;
     const other = await harness.services.agents.start(ws, 'coder', 'help');
     const second = harness.backend.last();
-    await second.tool('checkpoint', { title: 'T', message: 'm' });
     await end(second);
+    expect(await harness.services.feedback.codeRecipient(ws)).toBe(first.id);
+    await harness.services.agents.close(ws, first.id);
     pend();
     const before = coder.received.length;
     expect((await harness.services.feedback.send(ws)).recipients).toEqual([other.id]);

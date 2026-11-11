@@ -60,6 +60,15 @@ const pause = async (worktree: string, session: Session) => {
 const longerThanGrace = () => new Promise((resolve) => setTimeout(resolve, GRACE_MS * 2.5));
 const CHANGED = 'export function add(a: number, b: number, c = 0): number {\n  return a + b + c;\n}\n\nexport function twice(a: number): number {\n  return add(a, a);\n}\n';
 
+/** What the Coder does now instead of a checkpoint: commit. `impact` then brings dyffle up to date, as it does for an agent. */
+async function commit(session: Session, worktree: string, message: string) {
+  runGit(worktree, 'add', '-A');
+  runGit(worktree, 'commit', '-qm', message);
+  await tool(session, 'impact', {});
+  return runGit(worktree, 'rev-parse', 'HEAD').trim();
+}
+const titles = async (url: string) => (await (await get(`${url}views.json`)).json()).views.map((v: { title: string }) => v.title);
+
 async function create(goal: string) {
   const response = await post('/api/workspaces', { goal, repos: [{ name: 'shop', base: 'main' }] });
   expect(response.status).toBe(201);
@@ -106,10 +115,10 @@ describe('pausing', () => {
     await paused(worktree);
   });
 
-  it('makes no difference to the map, checkpoint, comments or PRs', async () => {
+  it('makes no difference to the map, commits, comments or PRs', async () => {
     const { ws, session, agent, worktree } = await create('Paused work');
     writeFile(worktree, 'src/math.ts', CHANGED);
-    await tool(session, 'checkpoint', { title: 'Before', message: 'm' });
+    const before = await commit(session, worktree, 'Before');
     await pause(worktree, session);
 
     // The strip's counts need no session, and don't start one.
@@ -123,24 +132,23 @@ describe('pausing', () => {
     expect(state.additions).toBeGreaterThan(0);
     expect(isRunning(worktree)).toBe(true);
     const url = state.viewer!;
-    expect((await (await get(`${url}feed.json`)).json()).posts.map((p: { title: string }) => p.title)).toEqual(['Before']);
+    expect(await titles(url)).toEqual(['Whole branch', 'Before', 'Uncommitted changes']);
     expect(await (await get(`${url}index.json`)).json()).toMatchObject({ nodes: expect.any(Array) });
 
     // Comments, made and read across a pause.
     const comment = { id: 'c1', path: 'src/math.ts', line: 2, side: 'RIGHT', body: 'Why c?', code: '  return a + b + c;' };
-    expect((await get(`${url}review.json?key=post-1`, { method: 'PUT', body: JSON.stringify({ body: '', comments: [comment], viewed: {} }) })).status).toBe(204);
+    expect((await get(`${url}review.json?key=commit-${before}`, { method: 'PUT', body: JSON.stringify({ body: '', comments: [comment], viewed: {} }) })).status).toBe(204);
     await paused(worktree);
     expect((await mapOf(ws)).repos[0]!.pendingComments).toBe(1);
-    expect(await (await get(`${url}review.json?key=post-1`)).json()).toMatchObject({ comments: [{ id: 'c1' }] });
+    expect(await (await get(`${url}review.json?key=commit-${before}`)).json()).toMatchObject({ comments: [{ id: 'c1' }] });
     await paused(worktree);
 
-    // Send, and a checkpoint measured from the one before the pause.
+    // Send, and a commit after the pause next to the one before it.
     expect((await post(`/api/workspaces/${ws}/send`, {})).status).toBe(200);
     expect(session.received.at(-1)).toContain('Why c?');
     writeFile(worktree, 'src/more.ts', 'export const more = 1;\n');
-    const result = JSON.parse((await tool(session, 'checkpoint', { title: 'After', message: 'm' })).text);
-    expect(result).toMatchObject({ version: 2, repos: [{ name: 'shop', files: 1 }] });
-    expect((await (await get(`${url}feed.json`)).json()).posts.map((p: { title: string }) => p.title)).toEqual(['Before', 'After']);
+    await commit(session, worktree, 'After');
+    expect(await titles(url)).toEqual(['Whole branch', 'Before', 'After', 'Uncommitted changes']);
     await pause(worktree, session);
 
     // A PR, with the branch's report in it.
@@ -161,7 +169,7 @@ describe('pausing', () => {
     try {
       expect((await mapOf(ws)).repos[0]!.error).toMatch(/could not start/);
       expect((await post(`/api/workspaces/${ws}/agents/${agent}/messages`, { text: 'go on' })).status).toBeLessThan(300);
-      const result = await tool(session, 'checkpoint', { title: 'T', message: 'm' });
+      const result = await tool(session, 'impact', {});
       expect(result.isError).toBe(true);
       expect(result.text).toMatch(/could not start/);
     } finally {
@@ -173,19 +181,21 @@ describe('pausing', () => {
 });
 
 describe('the end-of-turn check on a real worktree', () => {
-  it('takes real edits as changes, and a commit as none', async () => {
+  it('takes real edits as uncommitted, reminds once, and takes a commit as none', async () => {
     const { ws, session, agent, worktree } = await create('Checks');
     writeFile(worktree, 'src/math.ts', CHANGED);
     const before = session.received.length;
     session.emit({ type: 'turn.ended', outcome: 'success' });
     await vi.waitFor(() => expect(session.received.length).toBe(before + 1), { timeout: 10_000, interval: 20 });
-    expect(session.received.at(-1)).toContain('checkpoint');
+    expect(session.received.at(-1)).toContain('You left changes uncommitted');
 
+    // Ignored, it lets the turn end, and drums commits nothing itself.
     session.emit({ type: 'turn.ended', outcome: 'success' });
     await vi.waitFor(async () => {
-      const { posts } = WorkspaceState.parse(await (await get(`/api/workspaces/${ws}`)).json());
-      expect(posts.at(-1)).toMatchObject({ kind: 'checkpoint', title: 'Uncheckpointed changes', agent });
+      const { workspace } = WorkspaceState.parse(await (await get(`/api/workspaces/${ws}`)).json());
+      expect(workspace.agents[0]!.status).toBe('review');
     }, { timeout: 10_000, interval: 20 });
+    expect(runGit(worktree, 'status', '--porcelain').trim()).not.toBe('');
 
     runGit(worktree, 'add', '-A');
     runGit(worktree, 'commit', '-m', 'mine');
@@ -198,7 +208,7 @@ describe('the end-of-turn check on a real worktree', () => {
     }, { timeout: 10_000, interval: 20 });
     expect(session.received).toHaveLength(sent);
 
-    expect(await (await get('/api/nudges')).json()).toMatchObject({ coder: { 'uncheckpointed-changes': expect.any(Number) } });
+    expect(await (await get('/api/nudges')).json()).toMatchObject({ coder: { 'uncommitted-changes': expect.any(Number) } });
   });
 });
 
@@ -207,7 +217,7 @@ describe('restart', () => {
     const { ws, session, worktree, agent } = await create('Restart me');
     session.emit({ type: 'session', sessionId: 's-coder' });
     writeFile(worktree, 'src/math.ts', CHANGED);
-    await tool(session, 'checkpoint', { title: 'Before', message: 'm' });
+    await commit(session, worktree, 'Before');
     const added = await (await post(`/api/workspaces/${ws}/agents`, { instruction: 'Help' })).json();
     const second = fake.sessions.at(-1)!;
     second.emit({ type: 'session', sessionId: 's-second' });
@@ -227,7 +237,7 @@ describe('restart', () => {
     expect(state.steps.some((step) => step.kind === 'error' && step.text.includes('restarted'))).toBe(true);
     expect((await mapOf(ws)).repos[0]!.error).toBeUndefined();
     const url = (await mapOf(ws)).repos[0]!.viewer!;
-    expect((await (await get(`${url}feed.json`)).json()).posts.map((p: { title: string }) => p.title)).toEqual(['Before']);
+    expect(await titles(url)).toEqual(['Whole branch', 'Before', 'Uncommitted changes']);
 
     // A row that can't be answered says so; either agent takes a message and goes on.
     expect((await post(`/api/workspaces/${ws}/agents/${added.id}/permissions/waiting`, { decision: 'allow' })).status).toBe(404);

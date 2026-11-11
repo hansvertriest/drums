@@ -3,7 +3,6 @@ import type { TurnCheckRegistry } from './agents/turn-checks/registry.js';
 import { createArtifactService, type ArtifactService } from './artifacts/artifact-service.js';
 import type { ArtifactKindRegistry } from './artifacts/registry.js';
 import { createCodeService, type CodeService } from './code/code-service.js';
-import { createCheckpoints } from './code/checkpoints.js';
 import { createCodeSessions } from './code/code-sessions.js';
 import { createSessionKeeper } from './code/session-keeper.js';
 import { createPrService, type PrService } from './code/pr-service.js';
@@ -75,8 +74,7 @@ export function createServices(deps: ServiceDeps): Services {
   });
   const agents = createAgentService({ store, backend, events, clock, ids, roles, tools, posts, artifacts, rolePicker, turnChecks, firstRole, code: () => code });
   const sessions = createSessionKeeper(createCodeSessions({ codeReview, store, events, viewerUrl }), { store, events, clock, graceMs: sessionGraceMs });
-  const checkpoints = createCheckpoints({ store, git, sessions, artifacts, namer: agents.namer });
-  const code = createCodeService({ store, git, dependencies, projects, codeReview, sessions, checkpoints });
+  const code = createCodeService({ store, git, dependencies, projects, codeReview, sessions });
   const prs = createPrService({ store, events, git, pullRequests, sessions, agents: () => agents });
   const feedback = createFeedbackService({ store, events, clock, artifacts, posts, agents: () => agents, code: () => code, roles });
   const workspaces = createWorkspaceService({ store, clock, ids, agents, artifacts, posts, feedback, code, roles, rolePicker, firstRole });

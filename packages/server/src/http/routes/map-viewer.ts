@@ -6,7 +6,7 @@ import { browserOrigin, isOurHost } from '../guard.js';
 import type { RouteGroup } from '../route-group.js';
 import { repoParam, workspaceParam } from '../validate.js';
 
-const ReviewKey = z.string().regex(/^(live|post-\d+)$/);
+const ReviewKey = z.string().regex(/^(live|uncommitted|commit-[0-9a-f]{40})$/);
 const FilePath = z.string().min(1).max(4096);
 const IndexPosition = z.coerce.number().int().nonnegative();
 const Client = z.string().max(100).optional();
@@ -78,7 +78,7 @@ export const mapViewerRoutes: RouteGroup = {
       })
       .get(`${at}/indexes.json`, async (c) => json(JSON.stringify((await source(c)).labels())))
       .get(`${at}/index.json`, async (c) => json(found((await source(c)).index(query(IndexPosition, c.req.query('i') ?? '0')))))
-      .get(`${at}/feed.json`, async (c) => json((await source(c)).feed()))
+      .get(`${at}/views.json`, async (c) => json((await source(c)).views()))
       .get(`${at}/source.json`, async (c) =>
         json(found((await source(c)).source(query(ReviewKey, c.req.query('key')), query(FilePath, c.req.query('path'))))),
       )

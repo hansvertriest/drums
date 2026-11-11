@@ -18,7 +18,7 @@ export interface FeedbackService {
   answersFor(workspace: WorkspaceId, artifact: ArtifactId, version: VersionNumber): Promise<Answer[]>;
   /**
    * Routes pending answers to the agents that posted the latest versions, and code comments to
-   * the agent that posted the last checkpoint, or else the first that works on repos. The overall
+   * the first open agent that works on repos. The overall
    * note goes to the first of them. With nothing else the note goes to `to`, or else the first
    * agent. Delivers nothing if any recipient runs.
    */
@@ -82,12 +82,11 @@ export function createFeedbackService(deps: FeedbackServiceDeps): FeedbackServic
     return groups;
   };
 
-  /** Spec §5.2: whoever posted the last checkpoint, or else the agent whose role works on repos. */
+  /** Spec §5.2: the agent whose role works on repos, an open one first. */
   const codeRecipient = async (workspace: WorkspaceId): Promise<AgentId | undefined> => {
-    const lastCheckpoint = (await posts.list(workspace)).filter((post) => post.kind === 'checkpoint').at(-1);
-    if (lastCheckpoint) return lastCheckpoint.agent;
     const members = (await store.getWorkspace(workspace))?.agents ?? [];
-    return (members.find((agent) => roles.get(agent.role).needsRepo) ?? members[0])?.id;
+    const coders = members.filter((agent) => roles.get(agent.role).needsRepo);
+    return (coders.find((agent) => !agent.closed) ?? coders[0] ?? members[0])?.id;
   };
 
   const collectCode = async (workspace: WorkspaceId, groups: Map<AgentId, Delivery>) => {

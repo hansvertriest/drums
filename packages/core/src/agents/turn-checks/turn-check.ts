@@ -15,7 +15,7 @@ export interface EndedTurn {
 
 /** What checks may call. Services only, as with tools. */
 export interface TurnCheckServices {
-  code: Pick<CodeService, 'uncheckpointed' | 'checkpoint'>;
+  code: Pick<CodeService, 'uncommitted'>;
 }
 
 /**

@@ -58,7 +58,7 @@ export interface ArtifactService {
 }
 
 /** A version's thread entry, without what the post service adds. */
-export type ArtifactPost = WithoutPlace<Extract<PostDraft, { kind: 'version' | 'checkpoint' }>>;
+export type ArtifactPost = WithoutPlace<Extract<PostDraft, { kind: 'version' }>>;
 
 export interface ArtifactServiceDeps {
   store: Store;

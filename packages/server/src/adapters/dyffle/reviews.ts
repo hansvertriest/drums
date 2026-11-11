@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PendingReview } from '@drums/core';
-import { reviewsMarkdown, type Review } from 'dyffle';
+import { isReviewKey, reviewsMarkdown, type Review } from 'dyffle';
 
 const NOTHING: PendingReview = { markdown: '', comments: 0, marks: [] };
 
@@ -13,6 +13,7 @@ const hash = (...parts: string[]) => createHash('sha256').update(parts.join('\0'
 const commentMark = (key: string, id: string, body: string) => hash(key, id, body);
 const overallMark = (key: string, body: string) => hash(key, 'overall', body);
 
+/** The reviews dyffle still shows: those of feed posts, from before dyffle 0.7, are left out, as `reviewsMarkdown` leaves them out. */
 function readReviews(dir: string): Review[] {
   let names: string[];
   try {
@@ -20,7 +21,9 @@ function readReviews(dir: string): Review[] {
   } catch {
     return [];
   }
-  return names.filter((name) => name.endsWith('.json')).map((name) => JSON.parse(readFileSync(join(dir, name), 'utf8')) as Review);
+  return names
+    .filter((name) => name.endsWith('.json') && isReviewKey(name.slice(0, -'.json'.length)))
+    .map((name) => JSON.parse(readFileSync(join(dir, name), 'utf8')) as Review);
 }
 
 /**

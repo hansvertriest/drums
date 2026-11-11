@@ -9,10 +9,11 @@ const setup = async () => {
   const ws = workspace.id;
   const session = harness.backend.last();
   const agent = workspace.agents[0]!;
-  const edit = (content = 'edited') => harness.code.state.contents.set(`/workspaces/${ws}/api`, content);
+  const edit = () => harness.code.state.uncommitted.add(`/workspaces/${ws}/api`);
+  const commit = () => harness.code.state.uncommitted.delete(`/workspaces/${ws}/api`);
   const load = async () => (await harness.store.getWorkspace(ws))!;
   const status = async () => (await load()).agents[0]!.status;
-  return { ...harness, ws, session, agent, edit, load, status };
+  return { ...harness, ws, session, agent, edit, commit, load, status };
 };
 
 const endTurn = async (session: FakeSession) => {
@@ -20,9 +21,9 @@ const endTurn = async (session: FakeSession) => {
   await settle();
 };
 
-const NUDGE = /^<drums-system>\nYou changed files[\s\S]*<\/drums-system>$/;
+const NUDGE = /^<drums-system>\nYou left changes uncommitted[\s\S]*<\/drums-system>$/;
 
-describe('changed files with no checkpoint since', () => {
+describe('changes left uncommitted', () => {
   it('leaves a turn that changed nothing alone', async () => {
     const { session, status } = await setup();
     await endTurn(session);
@@ -30,44 +31,32 @@ describe('changed files with no checkpoint since', () => {
     expect(await status()).toBe('review');
   });
 
-  it('nudges once, keeps the agent running, and is satisfied by a checkpoint', async () => {
-    const { session, edit, status, load, services, ws, code } = await setup();
+  it('nudges once, keeps the agent running, and is satisfied by a commit', async () => {
+    const { session, edit, commit, status, load, services, ws } = await setup();
     edit();
     await endTurn(session);
     expect(session.received.at(-1)).toMatch(NUDGE);
     expect(await status()).toBe('running');
     await expect(services.agents.send(ws, (await load()).agents[0]!.id, 'hello')).rejects.toThrow(/is working/);
 
-    await session.tool('checkpoint', { title: 'Paging', message: 'Adds paging' });
+    commit();
     await endTurn(session);
     expect(session.received.filter((text) => NUDGE.test(text))).toHaveLength(1);
     expect(await status()).toBe('review');
-    expect(code.state.sessions[0]!.posts.map((post) => post.title)).toEqual(['Paging']);
   });
 
-  it('posts for the agent if it still does not, attributed to it, and does not ask again', async () => {
+  it('does not commit for the agent if it still does not, and does not ask again', async () => {
     const { session, edit, agent, status, services, ws, code } = await setup();
     edit();
     await endTurn(session);
     await endTurn(session);
     expect(session.received.filter((text) => NUDGE.test(text))).toHaveLength(1);
-    expect(code.state.sessions[0]!.posts).toMatchObject([{ title: 'Uncheckpointed changes', author: 'Coder' }]);
-    expect((await services.posts.list(ws)).at(-1)).toMatchObject({ kind: 'checkpoint', agent: agent.id, title: 'Uncheckpointed changes' });
+    expect(code.state.commits).toEqual([]);
     expect(await status()).toBe('review');
-    // That checkpoint counts: the next turn has nothing to say about it.
-    const before = session.received.length;
+    // A new turn with the changes still there gets one nudge again.
     await services.agents.send(ws, agent.id, 'and now?');
     await endTurn(session);
-    expect(session.received).toHaveLength(before + 1);
-  });
-
-  it('does not take a commit for a change: the content is what counts', async () => {
-    const { session, edit, code, ws } = await setup();
-    edit('v1');
-    await session.tool('checkpoint', { title: 'Done', message: 'm' });
-    code.state.contents.set(`/workspaces/${ws}/api`, 'v1');
-    await endTurn(session);
-    expect(session.received).toHaveLength(1);
+    expect(session.received.filter((text) => NUDGE.test(text))).toHaveLength(2);
   });
 
   it('never bothers a role that cannot change files', async () => {
@@ -83,24 +72,12 @@ describe('changed files with no checkpoint since', () => {
 
   it('survives a repo it cannot read, and says so in the steps', async () => {
     const { session, code, status, services, ws } = await setup();
-    code.git.contentId = async () => {
+    code.git.hasUncommitted = async () => {
       throw new Error('not a git repository');
     };
     await endTurn(session);
     expect(await status()).toBe('review');
     expect((await services.workspaces.state(ws)).steps.at(-1)).toMatchObject({ kind: 'tool', tool: 'drums', summary: expect.stringContaining('not a git repository') });
-  });
-
-  it('shows in the thread if the post drums tries fails, and the agent is still free', async () => {
-    const { session, edit, code, status, services, ws } = await setup();
-    edit();
-    await endTurn(session);
-    code.state.sessions[0]!.checkpoint = async () => {
-      throw new Error('dyffle broke');
-    };
-    await endTurn(session);
-    expect(await status()).toBe('review');
-    expect((await services.workspaces.state(ws)).steps.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('dyffle broke') });
   });
 });
 
@@ -115,7 +92,7 @@ describe('an artifact file written without artifact_update', () => {
     await endTurn(session);
     expect(await status()).toBe('review');
     expect(session.received.filter((text) => text.startsWith('<drums-system>'))).toHaveLength(1);
-    expect(code.state.sessions[0]!.posts).toEqual([]);
+    expect(code.state.commits).toEqual([]);
   });
 
   it('takes HTML in a repo for code, and other files for nothing', async () => {
@@ -150,9 +127,9 @@ describe('an artifact file written without artifact_update', () => {
     write(session, 'scope.html');
     await endTurn(session);
     expect(session.received).toHaveLength(2);
-    expect(session.received[1]).toContain('checkpoint');
+    expect(session.received[1]).toContain('uncommitted');
     expect(session.received[1]).toContain('artifact_update');
-    expect((await load()).nudges).toEqual({ coder: { 'uncheckpointed-changes': 1, 'artifact-file-written': 1 } });
+    expect((await load()).nudges).toEqual({ coder: { 'uncommitted-changes': 1, 'artifact-file-written': 1 } });
   });
 });
 
@@ -167,22 +144,22 @@ describe('when checks do not run', () => {
     expect(await status()).toBe('idle');
   });
 
-  it('runs none after a stop during the nudge turn, and posts nothing', async () => {
-    const { session, edit, services, ws, agent, status, code } = await setup();
+  it('runs none after a stop during the nudge turn', async () => {
+    const { session, edit, services, ws, agent, status } = await setup();
     edit();
     await endTurn(session);
     await services.agents.stop(ws, agent.id);
     await endTurn(session);
     expect(await status()).toBe('idle');
-    expect(code.state.sessions[0]!.posts).toEqual([]);
+    expect(session.received.filter((text) => NUDGE.test(text))).toHaveLength(1);
   });
 
   it('sends no nudge if Stop comes while the checks are running, and interrupts nothing', async () => {
     const { session, edit, services, ws, agent, status, code } = await setup();
     edit();
-    const contentId = code.git.contentId;
+    const hasUncommitted = code.git.hasUncommitted;
     let proceed = () => {};
-    code.git.contentId = (worktree) => new Promise((resolve) => (proceed = () => void contentId(worktree).then(resolve)));
+    code.git.hasUncommitted = (worktree) => new Promise((resolve) => (proceed = () => void hasUncommitted(worktree).then(resolve)));
     session.emit({ type: 'turn.ended', outcome: 'success' });
     await settle();
     await services.agents.stop(ws, agent.id);
@@ -218,16 +195,17 @@ describe('counting', () => {
     first.edit();
     await endTurn(first.session);
     await endTurn(first.session);
-    first.edit('again');
+    first.commit();
+    first.edit();
     await first.services.agents.send(first.ws, first.agent.id, 'more');
     await endTurn(first.session);
     await endTurn(first.session);
-    expect((await first.load()).nudges).toEqual({ coder: { 'uncheckpointed-changes': 2 } });
+    expect((await first.load()).nudges).toEqual({ coder: { 'uncommitted-changes': 2 } });
 
     const { workspace } = await first.services.workspaces.create({ goal: 'Second', repos: [{ name: 'web', base: 'dev' }] });
-    first.code.state.contents.set(`/workspaces/${workspace.id}/web`, 'edited');
+    first.code.state.uncommitted.add(`/workspaces/${workspace.id}/web`);
     await endTurn(first.backend.last());
-    expect(await first.services.agents.nudges()).toEqual({ coder: { 'uncheckpointed-changes': 3 } });
+    expect(await first.services.agents.nudges()).toEqual({ coder: { 'uncommitted-changes': 3 } });
   });
 
   it('counts nothing a nudge would not have been sent for', async () => {

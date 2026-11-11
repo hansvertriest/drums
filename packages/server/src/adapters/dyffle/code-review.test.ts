@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CodeReviewSession } from '@drums/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -37,8 +37,19 @@ export function twice(a: number): number {
 }
 `;
 
+interface View {
+  kind: string;
+  title: string;
+  stats?: { files: number; additions: number };
+}
+const viewsOf = (session: CodeReviewSession) => (JSON.parse(session.map.views()) as { views: View[] }).views;
+const commit = (dir: string, message: string) => {
+  runGit(dir, 'add', '-A');
+  runGit(dir, 'commit', '-qm', message);
+};
+
 describe('a session', () => {
-  it('announces itself so `dyffle post` works, and takes that back on stop', async () => {
+  it('announces itself so `dyffle comments` works, and takes that back on stop', async () => {
     const session = await open();
     const file = join(repo, '.dyffle', 'server.json');
     expect(JSON.parse(readFileSync(file, 'utf8')).url).toBe(viewerUrl);
@@ -52,18 +63,24 @@ describe('a session', () => {
     expect(existsSync(join(repo, '.dyffle'))).toBe(true);
   });
 
-  it('checkpoints in process, with a change once and none after', async () => {
+  it('keeps a dyffle of the branch, one per commit, and one of the uncommitted changes', async () => {
     const session = await open();
+    runGit(repo, 'checkout', '-q', '-b', 'feature');
     writeFile(repo, 'src/math.ts', CHANGED);
-    const first = await session.checkpoint({ title: 'Add c', message: 'Adds `c`', author: 'Coder' });
-    expect(first.post).toBe(1);
-    expect(first.stats?.files).toBe(1);
-    expect(JSON.parse(readFileSync(join(repo, '.dyffle', 'posts', '0001.json'), 'utf8'))).toMatchObject({ title: 'Add c', author: 'Coder' });
-    const second = await session.checkpoint({ title: 'Nothing', message: 'x', author: 'Coder' });
-    expect(second.stats).toBeUndefined();
+    commit(repo, 'Add c');
+    writeFile(repo, 'src/other.ts', 'export const x = 1;\n');
+    await session.impact();
+    const views = viewsOf(session);
+    expect(views.map((v) => [v.kind, v.title])).toEqual([
+      ['branch', 'Whole branch'],
+      ['commit', 'Add c'],
+      ['uncommitted', 'Uncommitted changes'],
+    ]);
+    expect(views.map((v) => v.stats?.files)).toEqual([2, 1, 1]);
+    expect(JSON.parse(session.map.index(1)!).pr.changedFiles).toEqual(['src/math.ts']);
   });
 
-  it('does not reject a post because a listener throws', async () => {
+  it('does not let a listener that throws stop a rebuild', async () => {
     const session = await open();
     session.subscribe(() => {
       throw new Error('a bad listener');
@@ -72,8 +89,8 @@ describe('a session', () => {
       throw new Error('a bad frame');
     });
     writeFile(repo, 'src/math.ts', CHANGED);
-    await expect(session.checkpoint({ title: 'T', message: 'm', author: 'a' })).resolves.toMatchObject({ post: 1 });
-    expect(JSON.parse(session.map.feed()).posts).toHaveLength(1);
+    await session.impact();
+    expect(viewsOf(session).at(-1)?.stats?.files).toBe(1);
   });
 
   it('tells listeners what changed, in the port\'s terms', async () => {
@@ -81,21 +98,23 @@ describe('a session', () => {
     const seen: string[] = [];
     session.subscribe((event) => seen.push(event));
     writeFile(repo, 'src/math.ts', CHANGED);
-    await session.checkpoint({ title: 'T', message: 'm', author: 'a' });
-    expect(seen).toContain('feed');
+    await session.impact();
+    expect(seen).toContain('views');
+    expect(seen).not.toContain('feed');
   });
 
-  it('resumes: a new session on the same worktree keeps the posts, and measures from the last', async () => {
+  it('resumes: a new session on the same worktree keeps the commits and reviews', async () => {
     const first = await open();
+    runGit(repo, 'checkout', '-q', '-b', 'feature');
     writeFile(repo, 'src/math.ts', CHANGED);
-    await first.checkpoint({ title: 'One', message: 'm', author: 'a' });
+    commit(repo, 'One');
+    await first.impact();
+    const sha = runGit(repo, 'rev-parse', 'HEAD').trim();
+    first.map.saveReview(`commit-${sha}`, JSON.stringify({ body: 'ok', comments: [], viewed: {} }));
     await first.stop();
     const second = await open();
-    expect(JSON.parse(second.map.feed()).posts).toHaveLength(1);
-    expect((await second.checkpoint({ title: 'Two', message: 'm', author: 'a' })).stats).toBeUndefined();
-    writeFile(repo, 'src/other.ts', 'export const x = 1;\n');
-    const third = await second.checkpoint({ title: 'Three', message: 'm', author: 'a' });
-    expect(third).toMatchObject({ post: 3, stats: { files: 1 } });
+    expect(viewsOf(second).map((v) => v.title)).toEqual(['Whole branch', 'One', 'Uncommitted changes']);
+    expect(JSON.parse(second.map.review(`commit-${sha}`)!).body).toBe('ok');
   });
 
   it('fails cleanly on a base that does not exist', async () => {
@@ -187,6 +206,15 @@ describe('reviews', () => {
     expect(onlyNew.markdown).not.toContain('Why c?');
   });
 
+  it('leaves out reviews of feed posts from before dyffle 0.7, which nothing shows any more', async () => {
+    const session = await open();
+    save(session, [comment]);
+    writeFileSync(join(repo, '.dyffle', 'reviews', 'post-1.json'), JSON.stringify({ key: 'post-1', body: 'Old', comments: [{ ...comment, id: 'old' }], viewed: {} }));
+    const pending = await review.pendingReview(repo, []);
+    expect(pending.comments).toBe(1);
+    expect(pending.markdown).not.toContain('Old');
+  });
+
   it('counts an overall comment as pending, with no line comments', async () => {
     const session = await open();
     save(session, [], 'Looks fine overall');
@@ -210,15 +238,19 @@ describe('two sessions on worktrees of one repo', () => {
     runGit(repo, 'worktree', 'add', '-b', 'two', join(parent, 'b'), 'main');
     const [a, b] = [await open(join(parent, 'a')), await open(join(parent, 'b'))];
     writeFile(join(parent, 'a'), 'src/a.ts', 'export const a = 1;\n');
+    commit(join(parent, 'a'), 'A');
     writeFile(join(parent, 'b'), 'src/b.ts', 'export const b = 1;\nexport const c = 2;\n');
-    const [first, second] = [await a.checkpoint({ title: 'A', message: 'm', author: 'x' }), await b.checkpoint({ title: 'B', message: 'm', author: 'y' })];
-    expect(first).toMatchObject({ post: 1, stats: { files: 1, additions: 1 } });
-    expect(second).toMatchObject({ post: 1, stats: { files: 1, additions: 2 } });
+    await Promise.all([a.impact(), b.impact()]);
+    expect(viewsOf(a).map((v) => v.title)).toEqual(['Whole branch', 'A', 'Uncommitted changes']);
+    expect(viewsOf(b).map((v) => [v.title, v.stats?.additions])).toEqual([
+      ['Whole branch', 2],
+      ['Uncommitted changes', 2],
+    ]);
     expect(a.map.index(0)).not.toContain('src/b.ts');
     expect(b.map.index(0)).not.toContain('src/a.ts');
     const refs = runGit(repo, 'for-each-ref', '--format=%(refname)', 'refs/dyffle');
-    expect(refs).toMatch(/refs\/dyffle\/worktrees\/a\/posts\/1/);
-    expect(refs).toMatch(/refs\/dyffle\/worktrees\/b\/posts\/1/);
+    expect(refs.trim().split('\n').sort()).toEqual(['refs/dyffle/worktrees/a/live', 'refs/dyffle/worktrees/b/live']);
+    expect(readdirSync(join(parent, 'cache'))).toHaveLength(1);
   });
 });
 

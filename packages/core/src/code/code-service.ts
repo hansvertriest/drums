@@ -5,17 +5,14 @@ import type { CodeReview, ImpactResult, MapSource, PendingReview } from '../port
 import type { Dependencies } from '../ports/dependencies.js';
 import type { Projects } from '../ports/projects.js';
 import type { Store } from '../ports/store.js';
-import type { Checkpoints } from './checkpoints.js';
 import { findRepo } from './code-sessions.js';
 import type { KeptSessions } from './session-keeper.js';
-
-export type { CheckpointResult } from './checkpoints.js';
 
 export interface PendingCode extends PendingReview {
   repo: string;
 }
 
-export interface CodeService extends Checkpoints {
+export interface CodeService {
   projects(): Promise<ProjectList>;
   /**
    * Worktrees for a new workspace, all or none, with their dependencies installed. An install that
@@ -27,9 +24,11 @@ export interface CodeService extends Checkpoints {
     requested: ReadonlyArray<{ name: string; base: string }>,
     branch: string,
   ): Promise<{ repos: WorkspaceRepo[]; failedInstalls: Array<{ repo: string; error: string }> }>;
-  /** Starts the sessions now, so the first checkpoint measures from here. Those that can't run try again on demand. */
+  /** Starts the sessions now, so the map is ready when it is opened. Those that can't run try again on demand. */
   openAll(workspace: WorkspaceId): Promise<void>;
   impact(workspace: WorkspaceId, target?: string): Promise<{ found: boolean; text: string }>;
+  /** Whether any repo's worktree has uncommitted changes. Needs no running session. */
+  uncommitted(workspace: WorkspaceId): Promise<boolean>;
   mapState(workspace: WorkspaceId): Promise<MapState>;
   /** What the frame of one repo reads and writes. */
   mapSource(workspace: WorkspaceId, repo: string): Promise<MapSource>;
@@ -49,14 +48,13 @@ export interface CodeServiceDeps {
   projects: Projects;
   codeReview: CodeReview;
   sessions: KeptSessions;
-  checkpoints: Checkpoints;
 }
 
 const NONE: BranchChanges = { files: 0, additions: 0, deletions: 0 };
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function createCodeService(deps: CodeServiceDeps): CodeService {
-  const { store, git, dependencies, projects, codeReview, sessions, checkpoints } = deps;
+  const { store, git, dependencies, projects, codeReview, sessions } = deps;
 
   const load = async (id: WorkspaceId) => {
     const workspace = await store.getWorkspace(id);
@@ -106,8 +104,6 @@ export function createCodeService(deps: CodeServiceDeps): CodeService {
         return { name, base, source: project.path };
       });
       const added: Array<{ source: string; name: string; branch?: string | undefined }> = [];
-      /** What "changed since" is measured from, until the first checkpoint. */
-      const contents = new Map<string, string>();
       const failedInstalls: Array<{ repo: string; error: string }> = [];
       try {
         for (const { name, base, source } of wanted) {
@@ -120,21 +116,22 @@ export function createCodeService(deps: CodeServiceDeps): CodeService {
             dependencies.install(sessions.worktree(id, name)).catch((error: unknown) => void failedInstalls.push({ repo: name, error: message(error) })),
           ),
         );
-        // After the installs: what they leave behind is not a change anyone made.
-        for (const { name } of wanted) contents.set(name, await git.contentId(sessions.worktree(id, name)));
       } catch (error) {
         // Dyffle has made nothing to clean up yet: sessions only start once every worktree exists.
         await undo(id, added);
         throw error instanceof ConflictError ? error : new ConflictError(message(error));
       }
-      const repos = wanted.map(({ name, base, source }) => ({ name, base, source, delivered: [], checkpointed: contents.get(name) as string }));
+      const repos = wanted.map(({ name, base, source }) => ({ name, base, source, delivered: [] }));
       return { repos, failedInstalls };
     },
     async openAll(id) {
       const { repos } = await load(id);
       await Promise.all(repos.map((repo) => sessions.session(id, repo).catch(() => undefined)));
     },
-    ...checkpoints,
+    async uncommitted(id) {
+      const { repos } = await load(id);
+      return (await Promise.all(repos.map((repo) => git.hasUncommitted(sessions.worktree(id, repo.name))))).some(Boolean);
+    },
     async impact(id, target) {
       const { repos } = await withRepos(id);
       const results = await Promise.all(

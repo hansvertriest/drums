@@ -72,6 +72,13 @@ const turnOver = (ws: string) => until(async () => (await statuses(ws)).every((s
 const waitingOnUser = (ws: string) => until(async () => (await statuses(ws)).includes('input'), 'the permission request');
 
 const tool = (session: Session, id: string, args: unknown) => session.options.tools.find((t) => t.id === id)!.call(args);
+/** What the Coder does now instead of a checkpoint: commit. `impact` then brings dyffle up to date, as it does for an agent. */
+async function commit(session: Session, worktree: string, message: string) {
+  runGit(worktree, 'add', '-A');
+  runGit(worktree, 'commit', '-qm', message);
+  await tool(session, 'impact', {});
+  return runGit(worktree, 'rev-parse', 'HEAD').trim();
+}
 /** `fetch` won't send another `Host`. */
 const statusWithHost = (path: string, host: string) =>
   new Promise<number | undefined>((resolve, reject) => {
@@ -202,14 +209,14 @@ describe('the map frame', () => {
     const { ws } = await create('Viewer token');
     const url = await viewer(ws);
     expect((await get(`/map/wrong/${ws}/shop/`)).status).toBe(404);
-    expect(await statusWithHost(`${url}feed.json`, 'evil.example')).toBe(404);
-    expect(await statusWithHost(`${url}feed.json`, new URL(drums.url).host)).toBe(200);
+    expect(await statusWithHost(`${url}views.json`, 'evil.example')).toBe(404);
+    expect(await statusWithHost(`${url}views.json`, new URL(drums.url).host)).toBe(200);
   });
 
   it('answers a page with no origin, and only that', async () => {
     const { ws } = await create('Viewer cors');
-    const feed = await get(`${await viewer(ws)}feed.json`, { headers: { origin: 'null' } });
-    expect(feed.headers.get('access-control-allow-origin')).toBe('null');
+    const views = await get(`${await viewer(ws)}views.json`, { headers: { origin: 'null' } });
+    expect(views.headers.get('access-control-allow-origin')).toBe('null');
   });
 
   it('keeps the rest of the API out of reach of a page with no origin', async () => {
@@ -221,14 +228,15 @@ describe('the map frame', () => {
     const { ws, session, worktree } = await create('Viewer data');
     const url = await viewer(ws);
     writeFile(worktree, 'src/math.ts', CHANGED);
-    await tool(session, 'checkpoint', { title: 'Add c', message: 'Adds `c`' });
-    expect(await (await get(`${url}indexes.json`)).json()).toEqual(['Branch (live)', '#1 Add c']);
+    const sha = await commit(session, worktree, 'Add c');
+    expect(await (await get(`${url}indexes.json`)).json()).toEqual(['Branch (live)', `${sha.slice(0, 7)} Add c`, 'Uncommitted']);
     expect(await (await get(`${url}index.json?i=1`)).json()).toMatchObject({ pr: { title: 'Add c' } });
     expect((await get(`${url}index.json?i=9`)).status).toBe(404);
-    expect((await (await get(`${url}feed.json`)).json()).posts[0]).toMatchObject({ title: 'Add c', author: 'Coder' });
-    expect(await (await get(`${url}source.json?key=post-1&path=src/math.ts`)).json()).toMatchObject({ path: 'src/math.ts' });
-    expect((await get(`${url}source.json?key=post-1&path=../../etc/passwd`)).status).toBe(404);
+    expect((await (await get(`${url}views.json`)).json()).views[1]).toMatchObject({ kind: 'commit', title: 'Add c', sha, key: `commit-${sha}` });
+    expect(await (await get(`${url}source.json?key=commit-${sha}&path=src/math.ts`)).json()).toMatchObject({ path: 'src/math.ts' });
+    expect((await get(`${url}source.json?key=commit-${sha}&path=../../etc/passwd`)).status).toBe(404);
     expect((await get(`${url}source.json?key=../x&path=a`)).status).toBe(400);
+    expect((await get(`${url}source.json?key=post-1&path=src/math.ts`)).status).toBe(400);
 
     const preflight = await get(`${url}review.json?key=live`, { method: 'OPTIONS', headers: { origin: 'null', 'access-control-request-method': 'PUT' } });
     expect(preflight.headers.get('access-control-allow-methods')).toContain('PUT');
@@ -248,12 +256,12 @@ describe('the map frame', () => {
     const stream = await get(`${await viewer(ws)}events`, { signal: controller.signal });
     expect(stream.headers.get('content-type')).toContain('text/event-stream');
     writeFile(worktree, 'src/math.ts', CHANGED);
-    await tool(session, 'checkpoint', { title: 'T', message: 'm' });
+    await tool(session, 'impact', {});
     const reader = stream.body!.getReader();
     let text = '';
-    while (!text.includes('event: feed')) text += new TextDecoder().decode((await reader.read()).value);
+    while (!text.includes('event: views')) text += new TextDecoder().decode((await reader.read()).value);
     controller.abort();
-    expect(text).toContain('event: feed');
+    expect(text).toContain('event: views');
   });
 });
 
@@ -262,14 +270,14 @@ describe('Send with code comments', () => {
     const { ws, session, worktree } = await create('Comments');
     const url = await viewer(ws);
     writeFile(worktree, 'src/math.ts', CHANGED);
-    await tool(session, 'checkpoint', { title: 'T', message: 'm' });
+    const sha = await commit(session, worktree, 'T');
     session.emit({ type: 'turn.ended', outcome: 'success' });
     const comment = { id: 'c1', path: 'src/math.ts', line: 2, side: 'RIGHT', body: 'Why c?', code: '  return a + b + c;', symbol: 'src/math.ts#add' };
-    await get(`${url}review.json?key=post-1`, { method: 'PUT', body: JSON.stringify({ body: '', comments: [comment], viewed: {} }) });
+    await get(`${url}review.json?key=commit-${sha}`, { method: 'PUT', body: JSON.stringify({ body: '', comments: [comment], viewed: {} }) });
     await turnOver(ws);
     expect((await post(`/api/workspaces/${ws}/send`, {})).status).toBe(200);
     expect(session.received.at(-1)).toContain('<drums-feedback repo="shop">');
-    expect(session.received.at(-1)).toContain('## Post #1: T');
+    expect(session.received.at(-1)).toContain(`## Commit ${sha.slice(0, 7)}: T`);
     expect(session.received.at(-1)).toContain('Why c?');
     expect((await mapOf(ws)).repos[0]!.pendingComments).toBe(0);
     session.emit({ type: 'turn.ended', outcome: 'success' });
@@ -302,7 +310,11 @@ describe('PRs', () => {
     const otherTree = join(parent, 'ws', ws, 'other');
     writeFile(worktree, 'src/math.ts', CHANGED);
     writeFile(otherTree, 'src/extra.ts', 'export const extra = 1;\n');
-    await tool(session, 'checkpoint', { title: 'T', message: 'm' });
+    // One repo committed by the Coder, the other left for drums to commit when the PRs open.
+    await commit(session, worktree, 'Make add take c');
+    session.emit({ type: 'turn.ended', outcome: 'success' });
+    // drums reminds the Coder of what is uncommitted once, and lets the turn end after that.
+    await until(async () => session.received.at(-1)!.includes('You left changes uncommitted'), 'the reminder to commit');
     session.emit({ type: 'turn.ended', outcome: 'success' });
     await turnOver(ws);
     const drafts = await (await get(`/api/workspaces/${ws}/prs`)).json();
@@ -319,7 +331,8 @@ describe('PRs', () => {
     expect(prs.map((p: { repo: string }) => p.repo)).toEqual(['shop', 'other']);
 
     const branch = `drums/${ws}`;
-    expect(runGit(repo.origin!, 'log', '-1', '--format=%s', branch).trim()).toBe('Add paging');
+    expect(runGit(repo.origin!, 'log', '-1', '--format=%s', branch).trim()).toBe('Make add take c');
+    expect(runGit(join(parent, 'other-origin.git'), 'log', '-1', '--format=%s', branch).trim()).toBe('Add paging');
     const log = readFileSync(ghLog, 'utf8');
     expect(log.match(/ARGS pr create --base main --head \S+ --title Add paging --body-file -/g)!.length).toBeGreaterThanOrEqual(2);
     expect(log).toContain('Shop part');
@@ -337,7 +350,7 @@ describe('two workspaces on one repo', () => {
     const b = await create('Second at once');
     writeFile(a.worktree, 'src/a.ts', 'export const a = 1;\n');
     writeFile(b.worktree, 'src/b.ts', 'export const b = 1;\n');
-    await Promise.all([tool(a.session, 'checkpoint', { title: 'A', message: 'm' }), tool(b.session, 'checkpoint', { title: 'B', message: 'm' })]);
+    await Promise.all([commit(a.session, a.worktree, 'A'), commit(b.session, b.worktree, 'B')]);
     const [inA, inB] = await Promise.all([a, b].map(async ({ ws }) => (await (await get(`${await viewer(ws)}index.json?i=0`)).text())));
     expect(inA).toContain('src/a.ts');
     expect(inA).not.toContain('src/b.ts');
@@ -350,7 +363,7 @@ describe('restart', () => {
   it('resumes sessions on demand, with what they had', async () => {
     const { ws, session, worktree } = await create('Survive restart');
     writeFile(worktree, 'src/math.ts', CHANGED);
-    await tool(session, 'checkpoint', { title: 'Before', message: 'm' });
+    await commit(session, worktree, 'Before');
     session.emit({ type: 'permission.requested', id: 'gone', tool: 'Bash', title: 'Run', detail: 'x' });
     await waitingOnUser(ws);
     const again = await main({ port: 0, webRoot: join(parent, 'web'), home: join(parent, 'home'), workspacesRoot: join(parent, 'ws'), agentBackend: fake.backend, rolePicker: pickCoder });
@@ -360,8 +373,8 @@ describe('restart', () => {
       expect(state.workspace.permissions[0]).toMatchObject({ id: 'gone', status: 'expired' });
       expect(state.workspace.agents[0]!.status).toBe('idle');
       const map = MapState.parse(await (await fetch(new URL(`/api/workspaces/${ws}/map`, base))).json());
-      const feed = await (await fetch(new URL(`${map.repos[0]!.viewer}feed.json`, base))).json();
-      expect(feed.posts[0].title).toBe('Before');
+      const { views } = await (await fetch(new URL(`${map.repos[0]!.viewer}views.json`, base))).json();
+      expect(views.map((v: { title: string }) => v.title)).toEqual(['Whole branch', 'Before', 'Uncommitted changes']);
     } finally {
       await again.stop();
     }

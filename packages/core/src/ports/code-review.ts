@@ -1,12 +1,6 @@
 /** The subset of dyffle drums uses (spec §7). `core` never sees dyffle's own types. */
-export type CodeReviewEventType = 'live' | 'feed' | 'status' | 'review';
-
-export interface CodeChange {
-  /** The post's number in this repo's feed. */
-  post: number;
-  /** Absent when nothing changed since the previous post with a change. */
-  stats?: { files: number; additions: number; deletions: number; symbols: number };
-}
+/** `views`: a dyffle of the branch, a commit or the uncommitted changes changed. */
+export type CodeReviewEventType = 'views' | 'status' | 'review';
 
 export type ImpactResult =
   /** Markdown for the agent: one node, one file, or the branch summary. */
@@ -27,7 +21,8 @@ export interface PendingReview {
 export interface MapSource {
   labels(): string[];
   index(i: number): string | undefined;
-  feed(): string;
+  /** The dyffles the viewer lists: the whole branch, one per commit, and the uncommitted changes. */
+  views(): string;
   source(key: string, path: string): string | undefined;
   review(key: string): string | undefined;
   /** Throws `InvalidError` if the review isn't one. */
@@ -38,13 +33,11 @@ export interface MapSource {
 export interface CodeReviewSession {
   readonly map: MapSource;
   subscribe(listener: (event: CodeReviewEventType) => void): () => void;
-  /** A post with a change: everything since the previous one. */
-  checkpoint(input: { title: string; message: string; author: string }): Promise<CodeChange>;
   /** A symbol or file's connections, or a summary of the branch with no target. Never throws on a bad target. */
   impact(target?: string): Promise<ImpactResult>;
   /** `body` with the branch's report in its dyffle section, replacing any earlier one. */
   withReport(body: string): Promise<string>;
-  /** A stopped session stays stopped. `open` on the same worktree resumes it: posts and snapshots are kept. */
+  /** A stopped session stays stopped. `open` on the same worktree resumes it: commit dyffles and reviews are kept. */
   stop(): Promise<void>;
 }
 
@@ -52,7 +45,7 @@ export interface OpenSessionRequest {
   worktree: string;
   /** The branch it is measured against. */
   baseRef: string;
-  /** Where the viewer is, so `dyffle post` and `dyffle comments` work from an agent's shell. */
+  /** Where the viewer is, so `dyffle comments` works from an agent's shell. */
   viewerUrl: string;
 }
 

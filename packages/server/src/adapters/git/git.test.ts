@@ -106,37 +106,29 @@ describe('commit and push', () => {
   });
 });
 
-describe('contentId', () => {
+describe('hasUncommitted', () => {
   const add = () => git.addWorktree({ repo, path: worktree(), branch: 'drums/x', base: 'main' });
 
-  it('changes with tracked, new and deleted files, and comes back with the same content', async () => {
+  it('sees new, changed, deleted and staged files, and nothing once they are committed', async () => {
     await add();
-    const first = await git.contentId(worktree());
-    expect(await git.contentId(worktree())).toBe(first);
+    expect(await git.hasUncommitted(worktree())).toBe(false);
     writeFile(worktree(), 'new.ts', 'x\n');
-    const withNew = await git.contentId(worktree());
-    expect(withNew).not.toBe(first);
+    expect(await git.hasUncommitted(worktree())).toBe(true);
+    await git.commitAll(worktree(), 'one');
+    expect(await git.hasUncommitted(worktree())).toBe(false);
     writeFile(worktree(), 'src/math.ts', 'changed\n');
-    expect(await git.contentId(worktree())).not.toBe(withNew);
+    expect(await git.hasUncommitted(worktree())).toBe(true);
     runGit(worktree(), 'checkout', '--', 'src/math.ts');
-    expect(await git.contentId(worktree())).toBe(withNew);
-  });
-
-  it('is the same before and after a commit, and moves nothing the user can see', async () => {
-    await add();
-    writeFile(worktree(), 'new.ts', 'x\n');
-    const before = runGit(worktree(), 'status', '--porcelain');
-    const id = await git.contentId(worktree());
-    expect(runGit(worktree(), 'status', '--porcelain')).toBe(before);
-    expect(await git.commitAll(worktree(), 'one')).toBe(true);
-    expect(await git.contentId(worktree())).toBe(id);
+    expect(await git.hasUncommitted(worktree())).toBe(false);
+    runGit(worktree(), 'rm', '-q', 'src/math.ts');
+    expect(await git.hasUncommitted(worktree())).toBe(true);
   });
 
   it('ignores what git ignores', async () => {
     await add();
     writeFile(worktree(), '.gitignore', 'built/\n');
-    const id = await git.contentId(worktree());
+    await git.commitAll(worktree(), 'ignore built');
     writeFile(worktree(), 'built/x.js', 'x\n');
-    expect(await git.contentId(worktree())).toBe(id);
+    expect(await git.hasUncommitted(worktree())).toBe(false);
   });
 });

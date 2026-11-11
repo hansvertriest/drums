@@ -10,14 +10,17 @@ function parses(content: string): boolean {
   }
 }
 
-/** The live dyffle map of a branch. Each version is a checkpoint, and the live branch shows before the first. */
+/**
+ * The live dyffle map of a branch: the whole branch, each commit and the uncommitted changes, all in
+ * dyffle's own viewer. It has no versions of its own; those from before were checkpoints.
+ */
 export const branchMapArtifactKind: ArtifactKindDefinition = {
   id: 'branch-map',
   name: 'Branch map',
   renderer: 'branch-map',
   showsWithoutVersions: true,
-  managed: 'The branch map follows your code: call checkpoint instead.',
+  managed: 'The branch map follows your code: commit your changes instead.',
   validate(content) {
-    if (!parses(content)) throw new InvalidError('A branch map version is the repos of a checkpoint, as JSON.');
+    if (!parses(content)) throw new InvalidError('A branch map has no versions of its own: it shows the commits on the branch.');
   },
 };

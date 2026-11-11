@@ -1,4 +1,4 @@
-import type { CodeChange, CodeReview, CodeReviewEventType, CodeReviewSession, ImpactResult, OpenSessionRequest, PendingReview } from '../ports/code-review.js';
+import type { CodeReview, CodeReviewEventType, CodeReviewSession, ImpactResult, OpenSessionRequest, PendingReview } from '../ports/code-review.js';
 import type { Dependencies } from '../ports/dependencies.js';
 import type { BranchChanges, Git, WorktreeRequest } from '../ports/git.js';
 import type { Project, Projects } from '../ports/projects.js';
@@ -6,7 +6,6 @@ import type { PullRequests } from '../ports/pull-requests.js';
 
 export interface FakeReviewSession extends CodeReviewSession {
   request: OpenSessionRequest;
-  posts: Array<{ title: string; message: string; author: string }>;
   stopped: boolean;
   emit(event: CodeReviewEventType): void;
 }
@@ -25,9 +24,8 @@ export function createFakeCode() {
     sessions: [] as FakeReviewSession[],
     /** Per worktree. */
     changes: new Map<string, BranchChanges>(),
-    /** What a worktree holds, per worktree: change it to act as an edit. */
-    contents: new Map<string, string>(),
-    change: { post: 1, stats: { files: 1, additions: 2, deletions: 1, symbols: 1 } } as CodeChange,
+    /** Worktrees with uncommitted changes: add one to act as an edit, delete it to act as a commit. */
+    uncommitted: new Set<string>(),
     impact: { status: 'found', markdown: '## impact' } as ImpactResult,
     pending: new Map<string, PendingReview>(),
     failAdd: undefined as string | undefined,
@@ -45,9 +43,10 @@ export function createFakeCode() {
     removeWorktree: async ({ path }) => void state.removed.push(path),
     branches: async (repo) => ({ names: ['dev', 'main'], current: repo.endsWith('web') ? 'dev' : 'main' }),
     changes: async (worktree) => state.changes.get(worktree) ?? { files: 1, additions: 2, deletions: 1 },
-    contentId: async (worktree) => state.contents.get(worktree) ?? 'initial',
+    hasUncommitted: async (worktree) => state.uncommitted.has(worktree),
     commitAll: async (worktree, message) => {
       state.commits.push({ worktree, message });
+      state.uncommitted.delete(worktree);
       return true;
     },
     push: async (worktree, branch) => void state.pushes.push({ worktree, branch }),
@@ -78,12 +77,11 @@ export function createFakeCode() {
       const listeners = new Set<(event: CodeReviewEventType) => void>();
       const session: FakeReviewSession = {
         request,
-        posts: [],
         stopped: false,
         map: {
           labels: () => ['Branch (live)'],
           index: () => '{}',
-          feed: () => '{"live":{},"posts":[]}',
+          views: () => '{"views":[]}',
           source: () => undefined,
           review: () => '{}',
           saveReview: () => {},
@@ -92,10 +90,6 @@ export function createFakeCode() {
         subscribe(listener) {
           listeners.add(listener);
           return () => listeners.delete(listener);
-        },
-        async checkpoint(input) {
-          session.posts.push(input);
-          return { post: session.posts.length, ...(state.change.stats ? { stats: state.change.stats } : {}) };
         },
         impact: async () => state.impact,
         withReport: async (body) => `${body}\n<!-- dyffle:start -->\nreport\n<!-- dyffle:end -->`,

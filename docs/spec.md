@@ -19,8 +19,8 @@ This document is for the agents building drums. Read it fully before writing cod
 | **Role** | What an agent is for: Scoper, Researcher, Designer, Coder, Reviewer. Defines its prompt, its tools and its default artifact kind. Roles are a registry; more will be added. |
 | **Artifact** | A living document shared by all agents in the workspace, with versions. Most are HTML; the branch map is a special kind. Any agent may post a new version of any artifact. |
 | **Version** | An immutable snapshot of an artifact, with its author (an agent), a one-line note of what changed, and a time. |
-| **Post** | An entry in an agent's thread: a new artifact version, a code checkpoint, a note (a post without an artifact), or a handover. |
-| **Checkpoint** | A version of the branch map: a dyffle post with a change, across all repos the workspace touched. |
+| **Post** | An entry in an agent's thread: a new artifact version, a note (a post without an artifact), or a handover. Workspaces from before dyffle 0.8 also have code checkpoints. |
+| **Commit** | How a Coder hands code over for review: a git commit in a repo's worktree. The branch map shows a dyffle per commit, next to the whole branch and the uncommitted changes. (Before dyffle 0.8 this was a *checkpoint*: a dyffle post with a change.) |
 | **Answer** | A value the user set in an artifact's controls. Unsent answers are pending. |
 | **Feedback** | What **Send** delivers to an agent: the answers for artifacts it authored, line comments on code, and an overall note. |
 | **Focus** | What the user is looking at when they send a message: artifact and version, map file, selected diff lines. Sent along with every message so "review this" is unambiguous. |
@@ -45,7 +45,7 @@ The mockup is the source of truth. The decisions behind it:
   - **Tabs:** one per artifact, with an amber count of pending answers.
   - **Version picker:** shows author and time for each version. The change note sits next to it, and a **Changes** switch highlights what changed.
   - **Older versions** are read-only, with a "Latest" link.
-  - **Branch map** (code): the dyffle map with a repo filter, Live versus checkpoints, a diff sheet with line comments and a **Viewed** switch.
+  - **Branch map** (code): the dyffle map with a repo filter, the whole branch versus each commit versus the uncommitted changes, a diff sheet with line comments and a **Viewed** switch.
 - **New workspace:** goal, optional repos, and a branch field once a repo is picked. **Never ask which agents to start**; drums decides from the goal. No folder paths shown.
 - **Add agent:** only "What should it do?". drums picks the role.
 - **Phones:** the strip becomes a drawer, and the rail and stage become two tabs.
@@ -96,7 +96,7 @@ drums/
 
 ### 3.3 `protocol`
 
-Plain types and zod schemas: `Workspace`, `Agent`, `AgentStatus`, `RoleId`, `Artifact`, `ArtifactVersion`, `Post` (a union: `note | version | checkpoint`), `Focus`, `Feedback`, `Answer`, `DomainEvent` (a union), and the request and response bodies of the HTTP API. Nothing else.
+Plain types and zod schemas: `Workspace`, `Agent`, `AgentStatus`, `RoleId`, `Artifact`, `ArtifactVersion`, `Post` (a union: `note | version | checkpoint | message | feedback | handover`; `checkpoint` only in older workspaces), `Focus`, `Feedback`, `Answer`, `DomainEvent` (a union), and the request and response bodies of the HTTP API. Nothing else.
 
 ### 3.4 `core`
 
@@ -115,7 +115,7 @@ core/src/
   tools/            the tool registry; handlers call services, never adapters directly
     registry.ts
     post.ts  artifact-list.ts  artifact-read.ts  artifact-create.ts  artifact-update.ts
-    checkpoint.ts  impact.ts  request-input.ts  feed.ts
+    impact.ts  request-input.ts  feed.ts
   artifacts/        artifact kinds registry (html, branch-map), versioning, conflict check
   workspaces/       create, open, archive; status aggregation
   agents/           AgentService: lifecycle, context injection, end-of-turn checks
@@ -233,7 +233,7 @@ web/src/
 
 Prompts are followed most of the time, not always, so the app checks when a turn ends:
 
-- **Changed files with no checkpoint since:** the agent gets one short system message telling it to post a checkpoint. If it still doesn't, drums posts one for it ("Uncheckpointed changes", attributed to that agent).
+- **Uncommitted changes:** for a role that works on repos, if any worktree has uncommitted changes, the agent gets one short system message telling it to commit. drums never commits for it; whatever is still uncommitted is committed when the user opens the PRs.
 - **An artifact file written without `artifact_update`:** the same nudge.
 - **Counting:** each nudge is counted per role. Frequent nudges mean the role prompt or the tool description needs fixing.
 
@@ -264,7 +264,7 @@ Use the current default Claude model (`claude-opus-5-5`) unless configured other
 
 **Send** groups pending input by recipient:
 - answers go to the agent that posted the artifact's **latest** version
-- code line comments go to the agent that posted the last checkpoint, or else the Coder
+- code line comments go to the Coder: the first open agent whose role works on repos
 - the overall note goes along with the first group
 
 If a recipient is running, Send is refused with a message instead of interrupting it. Each recipient gets one message:
@@ -290,7 +290,6 @@ Line comments use the Markdown that `dyffle comments` produces.
 | `artifact_read({id, version?})` | `{html, version, by, note}` | |
 | `artifact_create({title, html, note})` | `{id, version: 1}` | |
 | `artifact_update({id, base_version, html, note})` | `{version}` or a conflict with the latest | |
-| `checkpoint({title, message})` | a branch-map version across the repos it touched | dyffle post with `change: true` |
 | `impact({target?})` | dyffle `query()`: callers, routes, tests, breakage; no target = branch summary | needs dyffle plan items 1–3 |
 | `request_input({reason})` | sets the agent to Needs input | |
 | `handover({role, instruction})` | passes the work to another role when this turn ends | one per turn; see §4.1 |
@@ -303,24 +302,22 @@ The tool server knows the calling agent, so attribution is automatic.
 Each description says **when** to call the tool. Example:
 
 ```
-checkpoint: Post a checkpoint of the branch so the user can review it on the map.
-Call it after each coherent step (a feature step, a fix, a refactor) once the
-tests you ran pass, and always before you end your turn if you changed files
-since your last checkpoint. The message says what changed, why, and what to look at;
-put symbols and files in backticks.
+impact: Ask what a symbol or file is connected to and what the branch did to it.
+Call it before you change a symbol other code may depend on, to see who you could
+break. Call it with no target after each step, before you commit.
 ```
 
-Role prompts describe the work loop around the tools. For the Coder: small steps; after each, run the tests, call `impact`, then `checkpoint`; end every turn with a checkpoint or a `request_input`.
+Role prompts describe the work loop around the tools. For the Coder: small steps; after each, run the tests, call `impact`, then commit with a message written for the reviewer; end every turn with the changes committed or with a `request_input`.
 
 ---
 
 ## 7. Code workspaces and dyffle
 
-drums uses dyffle as a library and **owns its lifecycle**. Agents never start `dyffle watch`. The dyffle-side changes are planned in `../dyff/docs/plans/drums-support.md`.
+drums uses dyffle (the `dyffle` package on npm, 0.8 or later) as a library and **owns its lifecycle**. Agents never start `dyffle watch`.
 
 - **Creating:** `git worktree add` per repo into the workspace folder, all on the workspace branch, each from the base branch picked for that repo.
-- **Sessions:** one `LiveSession` per worktree with `baseRef` set to its base branch. drums calls `announce()` with its own URL, so `dyffle post` and `dyffle comments` still work from an agent's shell. `subscribe()` events (`live`, `feed`, `status`, `review`) become domain events.
-- **Pausing:** only workspaces that are open or have a running agent keep sessions. The rest are stopped and resumed on demand (dyffle item 5). The base-index cache is shared across worktrees (dyffle item 4).
+- **Sessions:** one `LiveSession` per worktree with `baseRef` set to its base branch. drums calls `announce()` with its own URL, so `dyffle comments` still works from an agent's shell, and `unannounce()` when it stops the session. Each session keeps a dyffle of the whole branch, one per commit and one of the uncommitted changes. `subscribe()` events (`views`, `status`, `review`) become domain events.
+- **Pausing:** only workspaces that are open or have a running agent keep sessions. The rest are stopped and resumed on demand; a resumed session reads its commit dyffles from its cache. The base-index cache is shared across worktrees (`baseCacheDir`).
 - **The branch map** combines the repos' merged indexes, one band per repo. The map does not track which agent changed what.
 - **Reviews:**
   - comments and Viewed state stay in each worktree's `.dyffle/reviews/`

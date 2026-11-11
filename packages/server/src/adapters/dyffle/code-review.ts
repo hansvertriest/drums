@@ -5,17 +5,14 @@ import { impactOf } from './impact.js';
 import { pendingReview } from './reviews.js';
 import { viewerHtml } from './viewer.js';
 
-const EventType = z.enum(['live', 'feed', 'status', 'review']) satisfies z.ZodType<CodeReviewEventType>;
+const EventType = z.enum(['views', 'status', 'review']) satisfies z.ZodType<CodeReviewEventType>;
 
 export interface DyffleOptions {
   /** One folder for all sessions' base indexes, so worktrees of one commit share theirs. */
   baseCacheDir: string;
 }
 
-/**
- * Dyffle's listeners must not throw: during `feed`, `post()` would reject though the post is
- * stored, and a retry would duplicate it. A listener's failure stays here.
- */
+/** Dyffle's listeners must not throw: a failure would stop dyffle's own work midway. A listener's failure stays here. */
 const guarded =
   <A extends unknown[]>(listener: (...args: A) => void) =>
   (...args: A) => {
@@ -38,7 +35,7 @@ function createSession(session: LiveSession): CodeReviewSession {
     map: {
       labels: () => session.labels(),
       index: (i) => session.index(i),
-      feed: () => session.feed(),
+      views: () => session.views(),
       source: (key, path) => session.source(key, path),
       review: (key) => session.review(key),
       saveReview(key, json, client) {
@@ -57,10 +54,6 @@ function createSession(session: LiveSession): CodeReviewSession {
           if (parsed.success) listener(parsed.data);
         }),
       ),
-    async checkpoint({ title, message, author }) {
-      const post = await session.post({ title, message, author, change: true });
-      return { post: post.id, ...(post.stats ? { stats: post.stats } : {}) };
-    },
     async impact(target) {
       const index = await current();
       return index ? impactOf(index, target) : { status: 'not-found', message: 'The branch has not been indexed yet.' };
