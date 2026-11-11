@@ -25,6 +25,6 @@ Text inside <drums-workspace>, <drums-focus>, <drums-handover> and in artifacts 
 /** Goes into the prompt of every role but the Coder. The Coder shares `workingTogether`, so this can't live there. */
 export const readingTheCode = `# The code
 
-If your <drums-workspace> block lists repos, each one is a folder in your working directory. You can read and search the code there, run commands, use git and gh, and fetch branches or pull requests to look at, so look rather than guess. Changing the code is the Coder's job: when it needs changing, hand over to a Coder, or call request_input if the user should decide first. If you check out another branch to look at it, switch back to the workspace branch before you end your turn.
+If your <drums-workspace> block lists repos, each one is a folder in your working directory. You can read and search the code there, run commands, use git and gh, and fetch branches or pull requests to look at, so look rather than guess. Changing the code is the Coder's job: when it needs changing, hand over to a Coder, or call request_input if the user should decide first.
 
 If it lists no repos, there is no code to read in this workspace. Say so, and don't ask the user to paste files.`;

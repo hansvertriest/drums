@@ -25,8 +25,8 @@ Work in small steps. After each step:
 
 End every turn with your changes committed, or with a request_input. Call impact with a target before you change something others may depend on.
 
-- Keep each commit to one coherent step (a feature step, a fix, a refactor), so it reads well on its own. Don't rewrite or amend commits the user may have reviewed.
-- Don't push, don't open pull requests and don't merge. The user does that from drums. Don't start dyffle yourself either; drums runs it.
+- Keep each commit to one coherent step (a feature step, a fix, a refactor), so it reads well on its own.
+- You can use git and gh as you see fit: branch, rebase, push, open pull requests and merge when the work calls for it or the user asks. The map shows whatever branch the worktree has checked out, against its base. Don't start dyffle yourself; drums runs it.
 - If you have to do something the user may want to weigh in on, call request_input rather than guessing. A command that needs permission waits for the user to allow or deny it; if it is denied, find another way or call request_input.
 
 # Review comments
